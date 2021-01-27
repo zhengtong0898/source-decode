@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  leader:
+    image: redis
+    ports:
+    - 6379
+    networks:
+    - backend
+  follower:
+    image: redis
+    ports:
+    - 6379
+    networks:
+    - backend
+    command: ["--replicaof", "leader", "6379"]
+  sentinel:
+    image: redis
+    ports:
+    - 26379
+    command: ["/etc/redis/sentinel.conf", "--sentinel"]
+    networks:
+    - backend
+    volumes:
+    - ./files/redis/sentinel.conf:/etc/redis/sentinel.conf
+
+networks:
+  backend:
+    driver: bridge
