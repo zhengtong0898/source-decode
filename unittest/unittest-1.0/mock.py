@@ -1124,10 +1124,25 @@ class CallableMixin(Base):
             # follow the parental chain:
             _new_parent = _new_parent._mock_new_parent
 
+    ###############################################################################################
+    # self.side_effect: 这个变量可能有三个值(ExceptionObject / IterableObject / CallableObject),
+    #                   1. 当值为: ExceptionObject 时, 抛出这个异常.
+    #                   2. 当值为: IterableObject 时, 使用 next() 去提取集合中的值.
+    #                   3. 当值为: CallableObject 时, 执行这个函数.
+    #
+    # self._mock_return_value: 是实例化 Mock 或 MagicMock 时指定参数 return_value 的实体,
+    #                          如果未指定那么默认就是 sentinel.DEFAULT 值.
+    #
+    # self._mock_wraps: 是实例化 Mock 或 MagicMock 时指定参数 wraps 的实体, 如果未指定默认是None值.
+    #
+    # self.return_value: 这个值跟 self._mock_return_value 使用的是同一个值.
+    ###############################################################################################
     def _execute_mock_call(self, /, *args, **kwargs):
         # separate from _increment_mock_call so that awaited functions are
         # executed separately from their call, also AsyncMock overrides this method
 
+        # 1. 如果实例化Mock或者MagicMock时提供了side_effect参数值,
+        # 那么mock就根据side_effect的值类型来返回具体的值(模拟值).
         effect = self.side_effect
         if effect is not None:
             if _is_exception(effect):
@@ -1142,12 +1157,18 @@ class CallableMixin(Base):
             if result is not DEFAULT:
                 return result
 
+        # 2. 如果实例化Mock或折MagicMock时没有提供side_effect参数值,
+        #    接着mock就检查实例化时是否提供了 return_value 参数值,
+        #    供了 return_value 那么就返回return_value.
         if self._mock_return_value is not DEFAULT:
             return self.return_value
 
+        # 3. 如果上面两个都没有提供, 则mock会检查实例化时是否提供了 wraps 参数值,
+        #    提供了就去执行这个wraps函数, 具体的返回值由这个wraps函数来控制.
         if self._mock_wraps is not None:
             return self._mock_wraps(*args, **kwargs)
 
+        # 4. 如果上面的所有参数都没有提供, 那么就返回一个 return_value (默认时None).
         return self.return_value
 
 
