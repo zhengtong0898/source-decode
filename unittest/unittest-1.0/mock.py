@@ -885,11 +885,18 @@ class NonCallableMock(Base):
                       self._calls_repr()))
             raise AssertionError(msg)
 
+    ###################################################################################################################
+    # assert_called_with
+    # 该函数用于验证最后一次调用时传递的参数与当前传递的参数是否一致, 主要体现在对参数的验证上.
+    ###################################################################################################################
     def assert_called_with(self, /, *args, **kwargs):
         """assert that the last call was made with the specified arguments.
 
         Raises an AssertionError if the args and keyword args passed in are
         different to the last call to the mock."""
+
+        # self.call_args 是一个 _Call 对象(一个Tuple对象).
+        # 当self.call_args is None 时则表示该mock尚未被调用过, 因此会抛出一个异常.
         if self.call_args is None:
             expected = self._format_mock_call_signature(args, kwargs)
             actual = 'not called.'
@@ -900,6 +907,9 @@ class NonCallableMock(Base):
         def _error_message():
             msg = self._format_mock_failure_message(args, kwargs)
             return msg
+
+        # NonCallableMock._call_matcher 在常规情况下会原封不动的返回(args, kwargs).
+        # 这里就是判断当前的 (args, kwargs) 和 最后一次执行mock的参数是否一致.
         expected = self._call_matcher((args, kwargs))
         actual = self._call_matcher(self.call_args)
         if expected != actual:
