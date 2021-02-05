@@ -1125,6 +1125,14 @@ class CallableMixin(Base):
             _new_parent = _new_parent._mock_new_parent
 
     ###############################################################################################
+    # _execute_mock_call
+    # 该函数通过三种可选方式来返回一个特定的值(用于替代那些当前网络访问不到的接口或数据).
+    # 1. self.side_effect
+    # 2. self.return_value
+    # 3. self._mock_wraps
+    # 这三种方式依次按照排列的优先级来决定返回值, 比如说当三个值都提供时, 会优先返回self.side_effect的值,
+    # 如果self.side_effect不满足返回值条件那么在考虑 self.return_value, 以此类推.
+    #
     # self.side_effect: 这个变量可能有三个值(ExceptionObject / IterableObject / CallableObject),
     #                   1. 当值为: ExceptionObject 时, 抛出这个异常.
     #                   2. 当值为: IterableObject 时, 使用 next() 去提取集合中的值.
