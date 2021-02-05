@@ -1078,10 +1078,22 @@ class CallableMixin(Base):
     def _mock_call(self, /, *args, **kwargs):
         return self._execute_mock_call(*args, **kwargs)
 
+    ###################################################################################################################
+    #
+    # _increment_mock_call
+    # 该函数用于记录和保存mock调用的次数、调用时传递的参数.
+    #
+    # _Call 由于它继承了 Tuple, 所以它本身也是一个Tuple, 用于将参数组合定义成一个对象,
+    # 并且赋予这个对象一系列的操作能力(例如: ==操作, __repr__定制显示, index, count等功能)
+    #
+    # #################################################################################################################
     def _increment_mock_call(self, /, *args, **kwargs):
         self.called = True
+        # 记录mock调用的次数
         self.call_count += 1
 
+        # 将args和kwargs包裹成一个_call对象
+        # 然后将_call对象保存到 call_args_list 集合中保存起来.
         # handle call_args
         # needs to be set here so assertions on call arguments pass before
         # execution in the case of awaited calls
@@ -1089,15 +1101,20 @@ class CallableMixin(Base):
         self.call_args = _call
         self.call_args_list.append(_call)
 
+        # 这两行代码不应该放在这里, 应该放在_new_parent = self._mock_new_parent 一起.
         # initial stuff for method_calls:
         do_method_calls = self._mock_parent is not None
         method_call_name = self._mock_name
 
+        # 这两行代码不应该放在这里, 应该放在_new_parent = self._mock_new_parent 一起.
         # initial stuff for mock_calls:
         mock_call_name = self._mock_new_name
         is_a_call = mock_call_name == '()'
+
+        # 将所有mock调用的参数都收集到self.mock_calls集合中.
         self.mock_calls.append(_Call(('', args, kwargs)))
 
+        # TODO: 由于尚未深入到 mock 链, 所以暂时不分析这里.
         # follow up the chain of mocks:
         _new_parent = self._mock_new_parent
         while _new_parent is not None:
