@@ -154,6 +154,7 @@ def _copy_func_details(func, funcopy):
 # _callable
 # 调用该函数来判断obj是不是一个可调用对象.
 #
+# 这段代码示例来源于: Lib/types.py#51行位置
 # class _C:
 #     def _m(self): pass
 #
