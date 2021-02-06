@@ -70,6 +70,13 @@ def _is_async_func(func):
 # 由于所有的mock类都继承了NonCallableMock, 所以只要使用isusbclass判断
 # 这个对象是不是NonCallableMock的子类, 就可以识别出它是不是一个mock对象.
 #
+# 实例化对象和为实例化对象的类型区别:
+# class Hollo(object): pass
+# ss = Hollo()
+#
+# print(ss)                            # <__main__.Hollo object at 0x00000188EB75A820>      这是实例化对象
+# print(Hello)                         # <class '__main__.Hollo'>                           这是未实例化对象
+# print(type(ss))                      # <class '__main__.Hollo'>                           这是未实例化对象
 #######################################################################################################################
 def _is_instance_mock(obj):
     # can't use isinstance on Mock objects because they override __class__
