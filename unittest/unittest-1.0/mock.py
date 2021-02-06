@@ -64,6 +64,22 @@ def _is_instance_mock(obj):
     return issubclass(type(obj), NonCallableMock)
 
 
+#######################################################################################################################
+# _is_exception
+# 该函数用于判断一个对象是不是一个Exception类型的对象:
+# 内置的Exception类在这里: https://docs.python.org/3/library/exceptions.html
+#
+# isinstance(obj, BaseException)   判断obj这个对象是不是一个BaseException对象.
+# isinstance(obj, type)            判断obj这个对象是不是一个type对象.
+# isinstance(obj, BaseException)   判断obj这个对象是不是一个BaseException的子类.
+#
+# 这里三个条件联合在一起做判断,
+# 如果obj是一个BaseException那么就不再做后续的判断直接返回True, 结束;
+# 如果obj不是一个BaseException, 那么就往下判断;
+# 如果obj是一个type(由于dict,list这些内置类型也是type类型), 单独的type并不能证明它是Exception, 还需要往下判断;
+# 如果obj是一个type同时也是BaseException的子类(派生类), 那么就返回True, 结束;
+# 如果obj是一个type但不是一个BaseException的子类, 那么就返回False, 结束;
+#######################################################################################################################
 def _is_exception(obj):
     return (
         isinstance(obj, BaseException) or
