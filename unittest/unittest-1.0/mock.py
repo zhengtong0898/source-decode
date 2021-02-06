@@ -57,7 +57,20 @@ def _is_async_func(func):
     else:
         return False
 
-
+#######################################################################################################################
+# _is_instance_mock(obj)
+# 该函数用于判断obj(已实例化的对象)是不是一个mock对象.
+#
+# issubclass的第一个参数要求必须是一个 class , 所以如果传递的是一个未实例化的 class,
+# 是也是可以做判断的, 但这样通常判断通常没有意义, 因为未实例化的对象不符合判断场景.
+#
+# 然而实例化过后的对象(它是一个instanced对象), 并不符合issubclass的参数类型(class)要求,
+# 所以这里需要使用type(obj)将它的class调出来(<class 'unittest.mock.Mock'>).
+#
+# 由于所有的mock类都继承了NonCallableMock, 所以只要使用isusbclass判断
+# 这个对象是不是NonCallableMock的子类, 就可以识别出它是不是一个mock对象.
+#
+#######################################################################################################################
 def _is_instance_mock(obj):
     # can't use isinstance on Mock objects because they override __class__
     # The base class for all mocks is NonCallableMock
