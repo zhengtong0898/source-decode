@@ -150,6 +150,27 @@ def _copy_func_details(func, funcopy):
             pass
 
 
+#######################################################################################################################
+# _callable
+# 调用该函数来判断obj是不是一个可调用对象.
+#
+# class _C:
+#     def _m(self): pass
+#
+# ClassType = type(_C)                    # _C是一个未实例化的类对象, type(_C)生成一个类类型.
+# UnboundMethodType = type(_C._m)         # _C._m是一个为实例化的方法, type(_C._m)生成一个未绑定的方法.
+# _x = _C()                               # _x 是一个_C的实例化对象
+# InstanceType = type(_x)                 # type(_x) 是一个类实例化类型.
+# MethodType = type(_x._m)                # type(_x._m) 是一个实例化方法类型.
+#
+#
+# isinstance(obj, type):
+# list, dict, NameError, ValueError 这些都是type, 都是callable对象.
+#
+# isinstance(obj, (staticmethod, classmethod, MethodType)) 这些都是判断obj是不是一个类对象中的方法.
+#
+# getattr(obj, '__call__', None) is not None 是判断obj是不是一个独立的函数.
+#######################################################################################################################
 def _callable(obj):
     if isinstance(obj, type):
         return True
