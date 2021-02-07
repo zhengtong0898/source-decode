@@ -4,6 +4,65 @@
 # Backport for other versions of Python available from
 # https://pypi.org/project/mock
 
+#######################################################################################################################
+# metaclass
+#######################################################################################################################
+#
+# 默认情况下 class 对象的创建, Python使用的是 type 内置函数来完成创建工作.
+#
+# type 有两种使用方法:
+# 1). type(obj)                                         返回obj对象的类型
+# 2). type(string, (BaseClass, ), {"attr": "value"})    Python创建class对象(不是实例化)采用这种方式.
+#
+# metaclass 是python提供的一种方式, 让开发者来完成对象的创建工作(把 type(string,(), {}) 这个指令留给开发者来完成).
+# class MetaOne(type): pass
+# class ExampleOne(metaclass=MetaOne): pass
+# 有两个注意事项:
+# 1. MetaOne 必须继承的是type对象.
+# 2. ExampleOne 必须指定metaclass参数, 才能表示ExampleOne类的实例化过程交给MetaOne来完成.
+#
+# metaclass 的声明周期, 举例说明:
+# class MetaA(type):
+#
+#     def __new__(cls, *args, **kwargs):
+#         print("MetaA: __new__")
+#         return super(MetaA, cls).__new__(cls, *args, **kwargs)  # 创建未实例化的类, 等同于: return type("Hello", (), {})
+#
+#     def __init__(cls, *args, **kwargs):
+#         print("MetaA: __init__")
+#
+#     def __call__(cls, *args, **kwargs):
+#         print("MetaA: __call__: begin")
+#         ss = super(MetaA, cls).__call__(*args, **kwargs)        # 实例化Hello类, 等同于 ss = Hello(*args, **kwargs)
+#         print("MetaA: __call__: end")
+#
+#     def good(cls):                                              # 由于Hello并不是继承MetaA, 所以Hello对象不拥有这个方法.
+#         print("MetaA good")
+#
+#
+# class Hello(metaclass=MetaA):
+#
+#     def __new__(cls, *args, **kwargs):
+#         print("Hello: __new__")
+#         return super(Hello, cls).__new__(cls, *args, **kwargs)
+#
+#     def __init__(self):
+#         print("Hello: __init__")
+#
+#
+# h = Hello()
+#
+#
+# Output:
+# MetaA: __new__
+# MetaA: __init__
+# MetaA: __call__: begin        这里开始执行 Hello 的 __new__ 和 __init__, 称为实例化
+# Hello: __new__
+# Hello: __init__
+# MetaA: __call__: end          这里退出和销毁Hello对象.
+#
+#######################################################################################################################
+
 __all__ = (
     'Mock',
     'MagicMock',
