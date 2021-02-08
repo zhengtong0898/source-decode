@@ -21,7 +21,7 @@
 # 1. MetaOne 必须继承的是type对象.
 # 2. ExampleOne 必须指定metaclass参数, 才能表示ExampleOne类的实例化过程交给MetaOne来完成.
 #
-# metaclass 的声明周期, 举例说明:
+# metaclass 的生命周期, 举例说明:
 # class MetaA(type):
 #
 #     def __new__(cls, *args, **kwargs):
@@ -2537,7 +2537,79 @@ def _format_call_signature(name, args, kwargs):
     return message % formatted_args
 
 
-
+#######################################################################################################################
+# _Call(tuple)
+# 该类对象用于存储mock调用时传递的参数.
+# 如果仅仅是用于存储mock调用时传递的参数, 那没有必要花这般精力来写一个_Call对象, 直接保存在一个tuple或者list中即可;
+# 它存在的意义是: 提供一个便捷的参数比较和历史版本匹配的功能, 以参数比较为例:
+# _Call(('name', (), {})) == ('name',)               使用_Call来做==操作比较时, 可以省略掉那些空的冗余.
+# _Call(('name', (1,), {})) == ('name', (1,))        使用_Call来做==操作比较时, 可以省略掉那些空的冗余.
+# _Call(((), {'a': 'b'})) == ({'a': 'b'},)           使用_Call来做==操作比较时, 可以省略掉那些空的冗余.
+#
+# _Call继承了tuple对象, 所以_Call本身就是一个tuple: tuple是一个实例化后就不可变的集合.
+#
+# _Call在__new__中做了什么?
+# 注释中有说明: 主要时围绕 value 参数进行预处理, 它要求 value 必须按照特定规范来提供,
+# 要么是: (args, kwargs), 要么是: (name, args, kwargs); 其他形式的value参数可能会导致不可预期的错误.
+#
+# _Call为什么要把这些代码写在__new__中, 而不是写在 __init__ 中? (能不能不写__new__)?
+# python中的构造函数是 __new__, 不是__init__, 所以参数预处理代码必须写在 __new__ 中, 举例说明:
+# ss = _Call('name', (), {})             # __new__ 是在赋值之前触发的, 而 __init__ 是在赋值给ss之后触发的.
+# 也就是说, 想要规范和统一 value 参数的规格, 就必须在__new__中完成.
+#
+# 如何证明 __new__ 是在赋值之前触发的, 而 __init__ 是在赋值之后触发的?
+# 样例代码:
+# class Hello(object):
+#
+#     def __new__(cls, desc=""):
+#         ss = object.__new__(cls)
+#         return ss
+#
+#     def __init__(self, desc=""):
+#         print("desc: ", desc)
+#         self.description = desc
+#
+# 测试1: __new__和__init__不是强关联
+# 描述1: __new__中的参数通常要和 __init__中的参数保持一致, Python保证传递给了
+#       __new__什么就会传递给__init__什么, 而不是交给__new__来控制.
+# 备注1: 如果参数是 list 或者 dict 这种引用类型, 那么在 __new__ 中更改了它的值, 也会同步影响到__init__的值.
+# zz = Hello(desc="good")
+# print("zz.description: ", zz.description)
+#
+# output:
+# desc:  good
+# zz.description:  good
+#
+# 结论1:  __new__创建对象时并没有将desc传递给object.__new__,
+#        而__init__可以收到desc参数, 这就表明 __new__ 并不掌控参数的分配.
+#
+#
+#
+# 测试2: __new__在赋值之前触发, 而__init__在赋值之后触发.
+# 描述2: 在 __new__ 中的 ss = object.__new__(cls) 并不是执行 __init__ 的意思, 而是构造一个对象.
+#       在 __new__ 中的 return ss , 返回给外部(外部可以用来赋值, 也可以直接当作临时变量使用, 使用完之后python将自动销毁).
+# class Hello(object):
+#
+#     def __new__(cls, desc=""):
+#         print("trigger __new__")
+#         ss = object.__new__(cls)
+#         # return ss                                   # 注释掉这段代码
+#
+#     def __init__(self, desc=""):
+#         print("trigger __init__")
+#         self.description = desc
+#
+#
+# zz = Hello(desc="good")
+# print("zz: ", zz)
+#
+# output:
+# trigger __new__
+# None
+#
+# 结论2: 虽然 __new__ 中仍然构建了一个对象, 但是并没有返回给外部, 所以外部 zz = 并没有完成赋值动作, 所以打印出来的是None.
+#        同时也没有打印出来"trigger __init__", 所以可以证明, 没有完成赋值动作, 就没有触发 __init__.
+#######################################################################################################################
 class _Call(tuple):
     """
     A tuple for holding the results of a call to a mock, either in the form
@@ -2563,31 +2635,30 @@ class _Call(tuple):
         kwargs = {}
         _len = len(value)
         if _len == 3:
-            name, args, kwargs = value
+            name, args, kwargs = value                      # (name: str, args: tuple, kwargs: dict)
         elif _len == 2:
             first, second = value
             if isinstance(first, str):
                 name = first
                 if isinstance(second, tuple):
-                    args = second
+                    args = second                           # (name: str, args: tuple)
                 else:
-                    kwargs = second
+                    kwargs = second                         # (name: str, kwargs: dict)
             else:
                 args, kwargs = first, second
         elif _len == 1:
-            value, = value
+            value, = value                                  # value, = value 等同于 value = value[0]
             if isinstance(value, str):
-                name = value
+                name = value                                # (name: str, (), {})
             elif isinstance(value, tuple):
-                args = value
+                args = value                                # ('', args: tuple, {})
             else:
-                kwargs = value
+                kwargs = value                              # ('', (), kwargs: dict)
 
         if two:
-            return tuple.__new__(cls, (args, kwargs))
+            return tuple.__new__(cls, (args, kwargs))       # ss = (args: tuple, kwargs: dict)
 
-        return tuple.__new__(cls, (name, args, kwargs))
-
+        return tuple.__new__(cls, (name, args, kwargs))     # ss = (name: str, args: tuple, kwargs: dict)
 
     def __init__(self, value=(), name=None, parent=None, two=False,
                  from_kall=True):
