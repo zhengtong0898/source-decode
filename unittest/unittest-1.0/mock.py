@@ -397,6 +397,25 @@ class _SentinelObject(object):
     def __repr__(self):
         return 'sentinel.%s' % self.name
 
+    ###################################################################################################################
+    # __reduce__
+    # 是一个object的内置方法(也被称为魔法方法), 它存在的目的是为了服务pickle.dumps和pickle.loads函数.
+    # __reduce__ 返回值必须按照特定规则来定义: 要么返回一个字符串, 要么返回一个元组.
+    #                                        当返回一个字符串时, 这个字符串必须是当前文件全局变量中能找到并被import的变量名.
+    #                                        当返回一个元组时, 第一个参数必须是一个callable对象,
+    #                                        第二个参数是一个元组(用来传递参数给第一个参数对象).
+    # 返回值规则参考这里:                     https://docs.python.org/3/library/pickle.html#object.__reduce__
+    #
+    # pickle.dump  可以将一个对象序列化成字符串, 这个字符串可以保存到文本中;
+    # pickle.dumps 可以将一个对象序列化成字符串, 这个字符串可以保存到内存中(变量);
+    # pickle.load  可以从文件中加载这段序列化的文本, 并将其re-create/re-load成一个对象.
+    # pickle.loads 可以将一个字符串变量, re-create/re-load成一个对象.
+    #
+    # pickle.dump 大致保存了文件的路径, 模块和对象名称;
+    # pickle.load 大致使用了import来根据路径/模块名称/变量名来完成对象创建.
+    #
+    # TODO: 由于整个mock.py文件中都没有使用到pickle来加载sentinel对象, 所以暂时不明白它的必要性, 后续需要追踪测试用例去理解.
+    ###################################################################################################################
     def __reduce__(self):
         return 'sentinel.%s' % self.name
 
