@@ -434,11 +434,33 @@ class _SentinelObject(object):
         return 'sentinel.%s' % self.name
 
 
+#######################################################################################################################
+#
+# _Sentinel
+# 该类是一个容器, 用于存储 _SentinelObject 集合.
+# 它的作用是提供一组类似于枚举的对象.
+#
+#######################################################################################################################
 class _Sentinel(object):
     """Access attributes to return a named object, usable as a sentinel."""
     def __init__(self):
         self._sentinels = {}
 
+    ###################################################################################################################
+    # __getattr__
+    # 是一个object的内置方法(也被称为魔法方法), 它的作用是当调用了不存在的方法或属性时会触发__getattr__方法.
+    #
+    # 当前函数作用:
+    # 当前_Sentinel类对象除了 __init__, __getattr__, __reduce__ 这三个内置方法(外部不可调用)之外, 并没有定义任何方法.
+    # 也就是说: sentinel.DEFAULT, sentinel.MISSING, sentinel.DELETED 都会触发 __getattr__ 方法.
+    # _Sentinel内部维护了一个self._sentinels字典, 用来当作名字唯一的_SentinelObject对象容器.
+    #
+    # 当前函数返回值:
+    # 根据参数给定的名字, 从 self._sentinels 中检索出 _SentinelObject 对象并返回;
+    # 检索的原则是: 如果参数 name 已存在于 self._sentinels 字典中, 那么就返回字典中的对应对象, 并且不做写入动作.
+    #              如果参数 name 不存在于 self._sentinels 字典中, 那么就写入到字典, 并返回对应的对象.
+    #
+    ###################################################################################################################
     def __getattr__(self, name):
         if name == '__bases__':
             # Without this help(unittest.mock) raises an exception
