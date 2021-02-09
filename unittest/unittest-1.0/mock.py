@@ -389,6 +389,20 @@ def _is_magic(name):
     return '__%s__' % name[2:-2] == name
 
 
+#######################################################################################################################
+#
+# _SentinelObject
+# 该类对象用于存储一个字符串名字, 备注上说是一个命名唯一的哨兵对象,
+# 我的理解是它起到一个枚举成员(也是起到唯一)的作用.
+#
+# 至于 __repr__ 中, 为什么返回: "sentinel.%s" % self.name
+# 我猜测是为了于下面的这几组变量保持统一:
+# sentinel = _Sentinel()
+# DEFAULT = sentinel.DEFAULT
+# _missing = sentinel.MISSING
+# _deleted = sentinel.DELETED
+#
+#######################################################################################################################
 class _SentinelObject(object):
     "A unique, named, sentinel object."
     def __init__(self, name):
