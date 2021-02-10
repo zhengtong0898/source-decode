@@ -611,7 +611,29 @@ class NonCallableMock(Base):
         instance = _safe_super(NonCallableMock, cls).__new__(new)
         return instance
 
-
+    ###################################################################################################################
+    # __init__
+    # 该方法在赋值之后执行, 这段代码是初始化代码, 用于给对象创建一系列属性成员.
+    # self.__dict__ = {"_mock_parent":            parent,
+    #                  "_mock_name":              name,
+    #                  "_mock_new_name":          _new_name,
+    #                  "_mock_new_parent":        _mock_new_parent,
+    #                  "_mock_sealed":            False,
+    #                  "_mock_children":          {},
+    #                  "_mock_wraps":             wraps,
+    #                  "_mock_delegate":          None,
+    #                  "_mock_called":            False,
+    #                  "_mock_call_args":         None,
+    #                  "_mock_call_count":        0,
+    #                  "_mock_call_args_list":    _CallList(),
+    #                  "_mock_mock_calls":        _CallList(),
+    #                  "method_calls":            _CallList(),
+    #                  "_mock_unsafe":            unsafe}
+    #
+    # TODO: parent和_new_parent参数是什么意思, 什么使用场景?
+    # TODO: spec和spec_set参数是什么意思, 什么使用场景?
+    # 
+    ###################################################################################################################
     def __init__(
             self, spec=None, wraps=None, name=None, spec_set=None,
             parent=None, _spec_state=None, _new_name='', _new_parent=None,
