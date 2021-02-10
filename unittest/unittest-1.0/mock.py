@@ -557,6 +557,15 @@ class _MockIter(object):
     def __next__(self):
         return next(self.obj)
 
+
+#######################################################################################################################
+#
+# class Base(object)
+# 该类是所有Mock对象的一个基类: NonCallableMock , CallableMixin , MagicMixin , MagicProxy , AsyncMockMixin ;
+# 用于声明 Base._mock_return_value 和 Base._mock_side_effect 这两个类变量;
+# 也就是说Base的派生类都具备这两个类变量.
+#
+#######################################################################################################################
 class Base(object):
     _mock_return_value = DEFAULT
     _mock_side_effect = None
@@ -564,10 +573,23 @@ class Base(object):
         pass
 
 
-
 class NonCallableMock(Base):
     """A non-callable version of `Mock`"""
 
+    ###################################################################################################################
+    # __new__
+    # 该方法在赋值之前执行, 这段代码的目的是为了扩展支持AsyncMock的继承扩展.
+    #
+    # 代码大致的含义是: 如果 当前类的派生类不是一个 AsyncMock, 那么就看看参数里面有没有指定 spec 或者 spec_set,
+    #                  如果 设定了 spec 或者 spec_set, 那么在创建构造对象是, 为其增加一个AsyncMock基类, 使其能具备相应的能力.
+    #
+    # 如果不考虑AsyncMock的话, 那么这段代码其实没有存在的必要, 因为下面这四行代码其实就是一个常规的默认实现.
+    # bases = (cls, )
+    # new = type(cls.__name__, bases, {'__doc__': cls.__doc__})
+    # instance = _safe_super(NonCallableMock, cls).__new__(new)
+    # return instance
+    #
+    ###################################################################################################################
     def __new__(cls, /, *args, **kw):
         # every instance has its own class
         # so we can create magic methods on the
