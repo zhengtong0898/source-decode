@@ -631,8 +631,14 @@ class NonCallableMock(Base):
     #                  "_mock_unsafe":            unsafe}
     #
     # TODO: parent和_new_parent参数是什么意思, 什么使用场景?
-    # TODO: spec和spec_set参数是什么意思, 什么使用场景?
-    # 
+    #
+    # spec参数期望的是一个对象, 该对象用于限定当前Mock对象的属性,
+    # 即: 调用 <Mock原本的属性和方法+spec的属性和方法> 之外的任何方法都会报错.
+    # 备注: 虽然调用之外的attribute和method会报错, 但是可以 setattr 去增加来规避报错.
+    #
+    # spec_set参数期望的是一个对象, 这是spec的严谨版本,
+    # 即: 不允许 setattr 的方式来规避报错, 也就是说设定了spec_set之后, 这个对象就是一个immutable对象.
+    #
     ###################################################################################################################
     def __init__(
             self, spec=None, wraps=None, name=None, spec_set=None,
@@ -709,11 +715,30 @@ class NonCallableMock(Base):
         _spec_signature = None
         _spec_asyncs = []
 
+        # 暂不考虑async.
+        # 但是从这个代码来看: 作者期望spec是一个对象类对象? 从spec中尝试遍历所有的attribute(和method)
+        # 如果spec有method是coroutine类型的函数, 那么就将其标识纳入到 self.__dict__['_spec_asyncs'] 中.
         for attr in dir(spec):
             if asyncio.iscoroutinefunction(getattr(spec, attr, None)):
                 _spec_asyncs.append(attr)
 
         if spec is not None and not _is_list(spec):
+
+            # 当spec是未实例化的类对象时, isinstance(spec, type) == True;  _spec_class 就是 spec 这个类对象.
+            # 当spec是已实例化的对象时, isinstance(spec, type) == False; _spec_class 就是 type(spec);
+            # type(已实例化的对象), 得到该对象的类对象. 举例:
+            # class Hello(object):
+            #     pass
+            #
+            # print(isinstance(Hello, type))      # True
+            # not_instance = Hello
+            # print(not_instance)                 # <class '__main__.Hello'>
+            # instanced = Hello()
+            # print(instanced)                    # <__main__.Hello object at 0x0000029EE61D6DF0>
+            # instanced_class = type(instanced)
+            # print(instanced_class)              # <class '__main__.Hello'>
+            # instance_again = instanced_class()
+            # print(instance_again)               # <__main__.Hello object at 0x000001EC406A0250>
             if isinstance(spec, type):
                 _spec_class = spec
             else:
