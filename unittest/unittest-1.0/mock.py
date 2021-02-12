@@ -175,6 +175,23 @@ def _extract_mock(obj):
         return obj
 
 
+#######################################################################################################################
+# inspect.signature(func)
+# 主要是采集函数的参数信息: 参数名, 参数类型(注解);
+# signature(签名) == 函数名 + 参数名 + 参数类型(注解);
+# 详细说明参考: https://docs.python.org/3/library/inspect.html#inspect.Signature
+#             https://docs.python.org/3/library/inspect.html#inspect.Parameter
+#
+#
+# _get_signature_object(func, as_instance, eat_self)
+# 该函数用于提取 func 的签名信息(函数名 + 参数名 + 参数类型注解).
+# 返回值: 如果 func 参数不符合提取signature的条件, 那就返回None;
+#
+# 什么是符合signature的条件呢?
+# 1). func必须是一个函数(callable或者具有 .__call__ 属性表明它是一个callable对象).
+# 2). 如果 func 不是一个函数, 那必须是一个类对象(未实例化的), 并且参数 as_instance 必须未False,
+#     _get_signature_object会尝试提取 class.__init__ 的签名(使用 functools.partial 来包裹, 即eat_self).
+#######################################################################################################################
 def _get_signature_object(func, as_instance, eat_self):
     """
     Given an arbitrary, possibly callable object, try to create a suitable
@@ -619,6 +636,11 @@ class NonCallableMock(Base):
     #                  "_mock_new_name":          _new_name,
     #                  "_mock_new_parent":        _mock_new_parent,
     #                  "_mock_sealed":            False,
+    #                  "_spec_class":             _spec_class,                  spec_class
+    #                  "_spec_set":               spec_set,                     bool
+    #                  "_spec_signature":         _spec_signature,              inspect.Signature
+    #                  "_mock_methods":           spec,                         dir(spec)
+    #                  "_spec_asyncs":            _spec_asyncs,                 [spec_methods: asyncFunction]
     #                  "_mock_children":          {},
     #                  "_mock_wraps":             wraps,
     #                  "_mock_delegate":          None,
@@ -655,12 +677,20 @@ class NonCallableMock(Base):
         __dict__['_mock_new_parent'] = _new_parent
         __dict__['_mock_sealed'] = False
 
+        # 如果 spec_set 制定了, 那就将它同意赋值给 spec, 然后将spec_set声明为True(bool值);
+        # 表明 spec_set = True 是一个严谨对象.
+        # 槽点: python变量的类型随意发生变化.
         if spec_set is not None:
             spec = spec_set
             spec_set = True
+
+        # 当 _eat_self 是 True 时, 通常表明spec是一个class类(未实例化)
+        # 当 _eat_self 是 False 时, 通常表明spec是一个函数惑方法.
+        # 当 parent 不是None时, 通常表明spec是一个类对象(不保证一定是未实例化的).
         if _eat_self is None:
             _eat_self = parent is not None
 
+        # 尝试添加spec限定对象.
         self._mock_add_spec(spec, spec_set, _spec_as_instance, _eat_self)
 
         __dict__['_mock_children'] = {}
@@ -676,9 +706,11 @@ class NonCallableMock(Base):
         __dict__['method_calls'] = _CallList()
         __dict__['_mock_unsafe'] = unsafe
 
+        # TODO: 尚不知道具体使用场景, self.configure_mock 也看不出来是为了什么功能做伏笔.
         if kwargs:
             self.configure_mock(**kwargs)
 
+        # 执行父类的__init__函数(这里通常是: Base.__init__)
         _safe_super(NonCallableMock, self).__init__(
             spec, wraps, name, spec_set, parent,
             _spec_state
@@ -707,7 +739,6 @@ class NonCallableMock(Base):
 
         If `spec_set` is True then only attributes on the spec can be set."""
         self._mock_add_spec(spec, spec_set)
-
 
     def _mock_add_spec(self, spec, spec_set, _spec_as_instance=False,
                        _eat_self=False):
@@ -745,9 +776,9 @@ class NonCallableMock(Base):
                 _spec_class = type(spec)
             res = _get_signature_object(spec,
                                         _spec_as_instance, _eat_self)
-            _spec_signature = res and res[1]
+            _spec_signature = res and res[1]      # 如果res存在, 那么它一定是一个元组对象, 提取第二个元素(Signature对象).
 
-            spec = dir(spec)
+            spec = dir(spec)                      # 提取spec的所有__dict__方法(字符串集合: [str, ...])
 
         __dict__ = self.__dict__
         __dict__['_spec_class'] = _spec_class
