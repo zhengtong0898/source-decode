@@ -792,18 +792,34 @@ class NonCallableMock(Base):
         __dict__['_mock_methods'] = spec
         __dict__['_spec_asyncs'] = _spec_asyncs
 
+    ###################################################################################################################
+    # __get_return_value
+    # __set_return_value
+    # __return_value_doc
+    # return_value = property(__get_return_value, __set_return_value, __return_value_doc)
+    #
+    # 这四行代码是python2里面的久语法, 用于读取和赋值NonCallableMock.return_value属性的值.
+    ###################################################################################################################
     def __get_return_value(self):
+        # 一般来说, 实例化Mock时会再其继承的父类(CallableMixin)中完成赋值
+        # self.__dict__['_mock_return_value'] = return_value 动作,
+        # 这个值默认情况下时 sentinel.DEFAULT, 或者是实例化时传递的具体值.
         ret = self._mock_return_value
+
+        # TODO: 委托对象处理机制待补充.
         if self._mock_delegate is not None:
             ret = self._mock_delegate.return_value
 
+        # 如果实例化Mock对象时, 没有提供return_value参数,
+        # 那么就子mock的return_value, 通常情况也是一个sentinel.DEFAULT.
         if ret is DEFAULT:
             ret = self._get_child_mock(
                 _new_parent=self, _new_name='()'
             )
-            self.return_value = ret
-        return ret
+            self.return_value = ret                     # 这里将会进入 __set_return_value 方法, 完成赋值动作.
 
+        # 如果实例化Mock对象时, 提供了return_value参数, 那么就返回这个参数值.
+        return ret
 
     def __set_return_value(self, value):
         if self._mock_delegate is not None:
