@@ -740,6 +740,11 @@ class NonCallableMock(Base):
         If `spec_set` is True then only attributes on the spec can be set."""
         self._mock_add_spec(spec, spec_set)
 
+    ###################################################################################################################
+    # _mock_add_spec
+    # 该方法的作用是给mock.__dict__增加一组属性.
+    # 这些属性主要为了根据参数来决定是否要限定mock对象的属性读取和写入的范围.
+    ###################################################################################################################
     def _mock_add_spec(self, spec, spec_set, _spec_as_instance=False,
                        _eat_self=False):
         _spec_class = None
