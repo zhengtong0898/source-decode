@@ -1068,43 +1068,83 @@ class NonCallableMock(Base):
                      _is_magic(e)]
         return sorted(set(extras + from_type + from_dict + from_child_mocks))
 
-
+    ###################################################################################################################
+    # __setattr__(self, name, value)
+    # 该函数为确保行为与定义时的表现的一致性, 要根据设定的值做必要的分流检查.
+    # 例如: 当Mock实例化时设定了 spec_set 对象时, 那么就限定只能设定限定范围内的属性...
+    ###################################################################################################################
     def __setattr__(self, name, value):
+        # _allowed_names = {
+        #     'return_value', '_mock_return_value', 'side_effect',
+        #     '_mock_side_effect', '_mock_parent', '_mock_new_parent',
+        #     '_mock_name', '_mock_new_name'
+        # }
+        # 当 name 参数的值是这个范围内的属性时, 可以设定该属性值.
         if name in _allowed_names:
             # property setters go through here
             return object.__setattr__(self, name, value)
+
+        # 当 self._spec_set 有值时, self._mock_methods 的值通常是 dir(self._spec_set), 所以前两个条件通常都会是True.
+        # name not in self._mock_methods 表示: 如果 name 不在限定范围内.
+        # name not in self.__dict__ 表示: 如果 name 不在当前Mock对象的 self.__dict__ 范围内.
+        # 这几个条件都不满足, 则报错.
         elif (self._spec_set and self._mock_methods is not None and
             name not in self._mock_methods and
             name not in self.__dict__):
             raise AttributeError("Mock object has no attribute '%s'" % name)
+
+        # _unsupported_magics = {
+        #     '__getattr__', '__setattr__',
+        #     '__init__', '__new__', '__prepare__',
+        #     '__instancecheck__', '__subclasscheck__',
+        #     '__del__'
+        # }
+        # Mock不允许对 _unsupported_magics 范围的属性做赋值动作,
+        # 如果 name 是这个范围的值, 则报错.
         elif name in _unsupported_magics:
             msg = 'Attempting to set unsupported magic method %r.' % name
             raise AttributeError(msg)
+
+        # 涉及到 magics 方法或属性(魔法方法或内置属性) 的赋值, 都进入这个条件分支.
         elif name in _all_magics:
+            # self._mock_methods == dir(spec)
+            # 所以魔法方法的赋值只限定再 dir(spec) 范围内, 否则报错.
             if self._mock_methods is not None and name not in self._mock_methods:
                 raise AttributeError("Mock object has no attribute '%s'" % name)
 
+            # 涉及到 magics 方法或属性的赋值, 主要是围绕value的值来决定如何赋值
+            # 当 value 不是一个 mock 实例对象时, 将value的值写入到 Mock类中然后实例化这个Mock类.
             if not _is_instance_mock(value):
                 setattr(type(self), name, _get_method(name, value))
                 original = value
                 value = lambda *args, **kw: original(self, *args, **kw)
+
+            # 当 value 是一个 mock 实例对象时, 将这个 value 视为一个 children 对象.
             else:
                 # only set _new_name and not name so that mock_calls is tracked
                 # but not method calls
                 _check_and_set_parent(self, value, None, name)
                 setattr(type(self), name, value)
                 self._mock_children[name] = value
+
+        # 当 name 参数的值为 '__class__' 时, 表示 value 时一个限定对象.
         elif name == '__class__':
             self._spec_class = value
             return
+
+        # 如果上述条件都不满足, 最后尝试检查将它添加到children集合中.
         else:
+            # TODO: _check_and_set_parent待处理
             if _check_and_set_parent(self, value, name, name):
                 self._mock_children[name] = value
 
+        # 默认情况下, self._mock_sealed 是 False, 所以这个条件只有在特殊情况下才会匹配到.
+        # TODO: self._mock_sealed 没搞明白, 后续通过观察 test 看看使用场景.
         if self._mock_sealed and not hasattr(self, name):
             mock_name = f'{self._extract_mock_name()}.{name}'
             raise AttributeError(f'Cannot set {mock_name}')
 
+        # 将 name 和 value 写入到Mock的属性中.
         return object.__setattr__(self, name, value)
 
 
