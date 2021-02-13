@@ -865,7 +865,16 @@ class NonCallableMock(Base):
     call_args_list = _delegating_property('call_args_list')
     mock_calls = _delegating_property('mock_calls')
 
-
+    ###################################################################################################################
+    # __get_side_effect
+    # __set_side_effect
+    # side_effect = property(__get_side_effect, __set_side_effect)
+    #
+    # 这三行代码是python2里面的久语法, 仍然是要读取或者写入 self._mock_side_effect 对象值.
+    # 这些代码的目的是为了增加委托代理的扩展点, 即:
+    # 当设定了self._mock_delegate时, 就读取 self._mock_delegate 对象的 _mock_side_effect 对象值.
+    # 当没有设定self._mock_delegate时, 就读取当前Mock对象的_mock_side_effect对象值.
+    ###################################################################################################################
     def __get_side_effect(self):
         delegated = self._mock_delegate
         if delegated is None:
