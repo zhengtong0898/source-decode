@@ -833,6 +833,18 @@ class NonCallableMock(Base):
                             __return_value_doc)
 
 
+    ###################################################################################################################
+    # __class__
+    # 覆盖默认的object内置方法, 用于返回具体的类对象.
+    # 当实例化Mock时提供了spec或者spec_set参数, 返回 spec 参数值: self._spec_class.
+    # 当实例化Mock时未提供spec或者spec_set参数, 返回当前实例的类对象; 例如:
+    #
+    # class Hello(object): pass
+    # h1 = Hello
+    # print(h1)                                 h1不是实例, 而是类(<class '__main__.Hello'>)
+    # h2 = Hello()
+    # print(h2)                                 当前实例(h2)的类(<__main__.Hello object at 0x000002019E77F220>)
+    ###################################################################################################################
     @property
     def __class__(self):
         if self._spec_class is None:
