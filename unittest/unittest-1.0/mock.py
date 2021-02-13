@@ -936,7 +936,12 @@ class NonCallableMock(Base):
         if _is_instance_mock(ret) and ret is not self:
             ret.reset_mock(visited)
 
-
+    ###################################################################################################################
+    # configure_mock
+    # 该函数通过kwargs参数来设定当前Mock对象, 这是一个非常常规的函数,
+    # 主要目的时为了省略赋值操作, 简化到只需要提供一个字典当作配置信息,
+    # 即可完成对Mock的配置, 作者的目的可能是为了实例化和配置分离.
+    ###################################################################################################################
     def configure_mock(self, /, **kwargs):
         """Set attributes on the mock through keyword arguments.
 
