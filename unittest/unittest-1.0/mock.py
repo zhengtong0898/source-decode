@@ -502,6 +502,13 @@ _allowed_names = {
 }
 
 
+#######################################################################################################################
+# _delegating_property(name)
+# 该函数用于判断是否需要返回self._mock_delegate的name值,
+# 如果self._mock_delegate没有定义, 那么就返回当前Mock对象的 _mock_ + name (例如: _mock_called)的值.
+# 如果self._mock_delegate有定义, 那么就返回self._mock_delegate的name的值,
+# 这会促使代码二次进入当前函数去尝试去提取 self._mock_delegate.'_mock_called' 的值, 这个过程是一个递归过程.
+#######################################################################################################################
 def _delegating_property(name):
     _allowed_names.add(name)
     _the_name = '_mock_' + name
@@ -851,6 +858,7 @@ class NonCallableMock(Base):
             return type(self)
         return self._spec_class
 
+    # 这里要么返回当前Mock对象的_mock_called值, 要么范围委托类的_mock_called值.
     called = _delegating_property('called')
     call_count = _delegating_property('call_count')
     call_args = _delegating_property('call_args')
