@@ -896,7 +896,16 @@ class NonCallableMock(Base):
 
     side_effect = property(__get_side_effect, __set_side_effect)
 
-
+    ###################################################################################################################
+    # reset_mock(self,  visited=None, *, return_value=False, side_effect=False)
+    # 重新初始化mock对象, 即: 把mock对象的called重置为未调用过状态, 把call_count重置为0, 以及其他关联的收集全部倒退到初始化状态.
+    #
+    # 参数*表示: 星号后面的参数, 再提供实参时必须提供参数名, 忽略参数名的话会报错.
+    # return_value参数: 当值为False时, 表示不需要重置self._mock_return_value的值;
+    #                  当值为True时, 表示重置 self._mock_return_value 的值为 sentinel.DEFAULT 值.
+    # side_effect参数: 当值为False时, 表示不需要重置self._mock_side_effect的值;
+    #                 当值为True时, 表示重置 self._mock_side_effect的值为 None 值.
+    ###################################################################################################################
     def reset_mock(self,  visited=None,*, return_value=False, side_effect=False):
         "Restore the mock object to its initial state."
         if visited is None:
@@ -917,6 +926,7 @@ class NonCallableMock(Base):
         if side_effect:
             self._mock_side_effect = None
 
+        # TODO: _mock_children 尚不知道使用场景, 先不做说明.
         for child in self._mock_children.values():
             if isinstance(child, _SpecState) or child is _deleted:
                 continue
