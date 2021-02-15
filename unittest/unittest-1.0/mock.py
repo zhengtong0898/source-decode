@@ -73,6 +73,57 @@
 # 当使用yield在函数(generator)内赋值给一个变量, 它就是一个consumer, 这时它依赖外部使用 s.send(ASCII-characters) 来传递消息给它.
 #######################################################################################################################
 
+
+#######################################################################################################################
+# coroutine
+#######################################################################################################################
+# 在python2中, generator有两个状态, just-started status 和 coroutine status
+# 刚完成赋值的generator对象是 just-started 状态, 例如:
+# def hello():
+#     print("start")
+#     count = 0
+#     while count < 20:
+#         print("running")
+#         yield count
+#         count += 1
+#     print("stop")
+#
+# h = hello()               # just-started
+# next(h)                   # coroutine: generator is ready to produce something.
+#                                        or        is ready to consum something.
+# output:
+# start
+# running
+#
+#
+# 除了手动进入coroutine状态, 另一种更便捷的方式进入coroutine状态是使用装饰器.
+# def coroutine(func):
+#     def wrapper(*args, **kwargs):
+#         ss = func()
+#         next(ss)
+#         return ss
+#     return wrapper
+#
+#
+# @coroutine
+# def hello():
+#     print("start")
+#     count = 0
+#     while count < 20:
+#         print("running")
+#         yield count
+#         count += 1
+#     print("stop")
+#
+#
+# h = hello()                               # 省略了手动next(h)步骤, 由coroutine装饰器来负责进入coroutine状态.
+#
+# output:
+# start
+# running
+#######################################################################################################################
+
+
 __all__ = (
     'Mock',
     'MagicMock',
