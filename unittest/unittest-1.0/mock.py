@@ -99,7 +99,7 @@
 # 除了手动进入coroutine状态, 另一种更便捷的方式进入coroutine状态是使用装饰器.
 # def coroutine(func):
 #     def wrapper(*args, **kwargs):
-#         ss = func()
+#          ss = func(*args, **kwargs)
 #         next(ss)
 #         return ss
 #     return wrapper
@@ -122,6 +122,58 @@
 # start
 # running
 #######################################################################################################################
+
+
+#######################################################################################################################
+# coroutine pipeline
+#######################################################################################################################
+# linux 的命令行的多个命令可以使用管道(pipeline)来配合完成数据的实时筛选,
+# 例如: cat xx.log | grep "error" ; 这条命令的意思是从文件开头处开始读取数据, 每读取到一行就即时传递这一行数据给grep命令进行筛选,
+#                                   如果匹配到数据那么就打印出来, 如果没有匹配到就不打印任何信息.
+#
+# 用coroutine来开发相同效果的是实现.
+# import time
+#
+#
+# def coroutine(func):
+#     def wrapper(*args, **kwargs):
+#         ss = func(*args, **kwargs)
+#         next(ss)
+#         return ss
+#     return wrapper
+#
+#
+# @coroutine
+# def cat(file_obj, target):
+#     while True:
+#         line = file_obj.readline()
+#         if not line:
+#             time.sleep(0.1)
+#             continue
+#         target.send(line)
+#
+#
+# @coroutine
+# def printer():
+#     while True:
+#         line = yield
+#         print(line)
+#
+#
+# @coroutine
+# def grep(pattern, target):
+#     while True:
+#         line = yield
+#         if pattern in line:
+#             target.send(line)
+#
+#
+# if __name__ == '__main__':
+#     with open("xx.log") as f:
+#         cat(f, grep("error", printer()))
+
+#######################################################################################################################
+
 
 
 __all__ = (
