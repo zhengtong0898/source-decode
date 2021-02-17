@@ -416,6 +416,19 @@ def _get_signature_object(func, as_instance, eat_self):
         return None
 
 
+#######################################################################################################################
+# _check_signature(func, mock, skipfirst, instance=False)
+# 该函数用于为 type(mock) 类添加 _mock_check_sig 和 __signature__ 属性.
+#          为 checksig 添加 func 属性.
+# TODO: 作用和目的暂时还不直到, 待后续补充.
+#
+# 知识点补充:
+# type(mock) 返回的是 <class 'unittest.mock.Mock'> 类对象, 这个类对象只属于这个mock.
+# 也就是说 type(mock) != unittest.mock.Mock.
+#
+# 因此 type(mock)._mock_check_sig = checksig 并不是作用再 unittest.mock.Mock 类对象中,
+# 而是作用在基于这个mock实例对象上.
+#######################################################################################################################
 def _check_signature(func, mock, skipfirst, instance=False):
     sig = _get_signature_object(func, instance, skipfirst)
     if sig is None:
@@ -428,6 +441,10 @@ def _check_signature(func, mock, skipfirst, instance=False):
     type(mock).__signature__ = sig
 
 
+#######################################################################################################################
+# _copy_func_details(func, funcopy)
+# 该函数用于将 func 函数对象的属性(仅下面这两个属性, 不含func.__dict__), 复制一份给 funcopy 函数对象.
+#######################################################################################################################
 def _copy_func_details(func, funcopy):
     # we explicitly don't copy func.__dict__ into this copy as it would
     # expose original attributes that should be mocked
