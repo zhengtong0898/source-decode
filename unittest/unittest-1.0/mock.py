@@ -355,6 +355,12 @@ def _is_exception(obj):
     )
 
 
+#######################################################################################################################
+# _extract_mock
+# 该函数用于提取obj(已实例化的对象)的mock属性(obj.mock), 如果obj是一个Autospecced function, 那么它就应该拥有mock属性.
+# 如果参数obj没有mock属性, 那么就返回obj对象.
+# 如果参数obj有mock属性, 那么就返回obj.mock对象.
+#######################################################################################################################
 def _extract_mock(obj):
     # Autospecced functions will return a FunctionType with "mock" attribute
     # which is the actual mock object that needs to be used.
