@@ -521,33 +521,61 @@ def _instance_callable(obj):
     return False
 
 
+#######################################################################################################################
+# _set_signature(mock, original, instance=False)
+# 该函数的作用是按照original的参数签名来创建一个新的mock对象,
+# 并且将新的mock对象作为第一个参数mock对象委托对象(意思是处理mock事务先交给新的mock对象处理, 然后再到第一个参数mock对象).
+#######################################################################################################################
 def _set_signature(mock, original, instance=False):
     # creates a function with signature (*args, **kwargs) that delegates to a
     # mock. It still does signature checking by calling a lambda with the same
     # signature as the original.
 
+    # 获取 original 的 signature.
     skipfirst = isinstance(original, type)
     result = _get_signature_object(original, instance, skipfirst)
     if result is None:
         return mock
     func, sig = result
+
+    # 重点:
+    # 这个函数并没有返回值, 所以它的目的并不是产生或者绑定内部属性,
+    # 而是尝试验证传递的参数与函数本身的参数要求是否吻合(是否符合实例化或执行的条件).
     def checksig(*args, **kwargs):
         sig.bind(*args, **kwargs)
+
     _copy_func_details(func, checksig)
 
+    # 获取original的函数名称.
     name = original.__name__
     if not name.isidentifier():
         name = 'funcopy'
+
+    # context的作用是一个scope
     context = {'_checksig_': checksig, 'mock': mock}
+
+    # 定义一个函数, 该函数返回mock对象.
     src = """def %s(*args, **kwargs):
     _checksig_(*args, **kwargs)
     return mock(*args, **kwargs)""" % name
+
+    # 创建一个函数, 并且写入到context中.
     exec (src, context)
+
+    # 从context中提取出函数.
     funcopy = context[name]
+
+    # 将mock的方法和属性, 写入到funcopy中,
+    # 并且将funcopy作为mock的委托对象.
     _setup_func(funcopy, mock, sig)
+
     return funcopy
 
 
+#######################################################################################################################
+# _setup_func(funcopy, mock, sig)
+# 该函数主要是将 mock 对象的属性和方法写入到funcopy中, 并且将funcopy作为mock的委托对象.
+#######################################################################################################################
 def _setup_func(funcopy, mock, sig):
     funcopy.mock = mock
 
