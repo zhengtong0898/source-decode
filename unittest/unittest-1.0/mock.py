@@ -273,17 +273,37 @@ FILTER_DIR = True
 # Without this, the __class__ properties wouldn't be set correctly
 _safe_super = super
 
+
+#######################################################################################################################
+# _is_async_obj(obj)
+# 该函数用于判断obj(已实例化的对象)是不是一个async对象.
+#
+# asyncio.iscoroutinefunction 用于判断一个未执行赋值的函数是不是定义了async def
+# inspect.isawaitable     1.已执行赋值的函数是不是一个 async def 对象.    isinstance(object, types.CoroutineType)
+#                         2.已执行赋值的函数是不是一个generator对象.      isinstance(object, types.GeneratorType)
+#                         3.已执行赋值的函数是不是一个abc.Awaitable对象.  isinstance(object, collections.abc.Awaitable)
+#
+#######################################################################################################################
 def _is_async_obj(obj):
     if _is_instance_mock(obj) and not isinstance(obj, AsyncMock):
         return False
     return asyncio.iscoroutinefunction(obj) or inspect.isawaitable(obj)
 
 
+#######################################################################################################################
+# _is_async_func(func)
+# 该函数用于判断func(未赋值的函数)是不是一个async函数.
+#
+# getattr(func, '__code__', None)  未执行的函数对象拥有 __code__ 属性, 已执行的函数没有 __code__ 属性.
+# asyncio.iscoroutinefunction      根据函数func.__code__.co_flags 来判断是不是一个coroutine.
+#
+#######################################################################################################################
 def _is_async_func(func):
     if getattr(func, '__code__', None):
         return asyncio.iscoroutinefunction(func)
     else:
         return False
+
 
 #######################################################################################################################
 # _is_instance_mock(obj)
