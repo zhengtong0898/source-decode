@@ -624,8 +624,13 @@ def _setup_func(funcopy, mock, sig):
 
     mock._mock_delegate = funcopy
 
-
+#######################################################################################################################
+# _setup_async_mock(mock)
+# 该函数主要是为mock参数添加一些标识(异步的)属性和方法.
+#######################################################################################################################
 def _setup_async_mock(mock):
+    # 为异步mock对象添加 _is_coroutine 属性.
+    # 为异步mock对象添加 await_count , await_args, await_args_list 属性(并提供初始化值).
     mock._is_coroutine = asyncio.coroutines._is_coroutine
     mock.await_count = 0
     mock.await_args = None
@@ -635,8 +640,12 @@ def _setup_async_mock(mock):
     # to a function and then the corresponding mock helper function
     # is called when the helper is accessed similar to _setup_func.
     def wrapper(attr, /, *args, **kwargs):
+        # TODO: 这里没看懂, 为什么要写mock.mock?
+        #       还有getattr(mock, 'assert_awaited')会报错: Attributes cannot start with 'assert' or 'assret'.
+        #       所以这里待后续debug后再补充.
         return getattr(mock.mock, attr)(*args, **kwargs)
 
+    # 为mock对象添加七项属性.
     for attribute in ('assert_awaited',
                       'assert_awaited_once',
                       'assert_awaited_with',
