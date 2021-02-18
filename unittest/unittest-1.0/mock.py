@@ -1043,6 +1043,12 @@ class NonCallableMock(Base):
         )
 
 
+    ###################################################################################################################
+    # attach_mock(self, mock, attribute)
+    # attribute: 该参数期望的是一个字符串.
+    # 该方法的用于将 attribute 字符串参数作为属性名和 mock 对象作为属性值, 写入到 self 这个mock对象中.
+    # 在写入之前先重置mock参数的_mock_parent, _mock_new_parent, _mock_name 和 _mock_new_name 属性.
+    ###################################################################################################################
     def attach_mock(self, mock, attribute):
         """
         Attach a mock as an attribute of this one, replacing its name and
