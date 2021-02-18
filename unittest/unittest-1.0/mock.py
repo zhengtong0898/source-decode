@@ -786,21 +786,52 @@ def _delegating_property(name):
     return property(_get, _set)
 
 
-
+#######################################################################################################################
+# _CallList(list)
+# 该类继承了list内置数据类型, 所以_CallList本质上也是一个list.
+# 该类重构了 __contains__ 内置方法: 即 in 关键词判断操作会触发这个内置方法.
+#
+# 如果 value 参数不是列表, 那么就采用list默认的比较方式, 即: 将value参数与列表中每个元素进行比较判断是否相等.
+# 如果 value 参数是一个列表, 那么就尝试比较两个列表是否相等, 或者当前列表的一段连续的元素与 value参数列表相等.
+#######################################################################################################################
 class _CallList(list):
 
     def __contains__(self, value):
+        # 如果value不是list类型, 那么采用list默认的比较方式来完成比较工作;
+        # 即: 将value参数与列表中每个元素进行比较判断是否相等.
         if not isinstance(value, list):
             return list.__contains__(self, value)
+
+        # value 是一个list类型.
+        # 获取value这个列表的长度.
         len_value = len(value)
+
+        # 获取当前列表的长度.
         len_self = len(self)
+
+        # 如果value这个列表的长度 大于 当前列表的长度, 返回False.
         if len_value > len_self:
             return False
 
+        # 条件来到这里, 表示当前列表的长度 大于 value这个列表的长度.
+        # (len_self - len_value) 的意思是: 从大的那个列表中截取出于小的那个列表一样大的列表.
+        #  + 1 是因为 range 读取一个列表从 0 开始, 读取到这个列表末尾是 n - 1, 所以要+1才能等于 n.
+        # 假设: len_value = 20 ; len_self = 30
+        # range(0, 30 - 20 + 1)
+        # range(0, 11)                      等于        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         for i in range(0, len_self - len_value + 1):
+            # self[0:0+20]                  20个元素            len_self == 30 所以不会报错.
+            # self[1:1+20]                  20个元素
+            # self[2:2+20]                  20个元素
+            # self[10:10+20]                20个元素
             sub_list = self[i:i+len_value]
+
+            # 重点:
+            # sub_list是20个元素的列表, value也是20个元素的列表.
+            # 如果任何一次相等, 则表示大的列表中有一段连续的元素与 value 这个列表相等.
             if sub_list == value:
                 return True
+
         return False
 
     def __repr__(self):
