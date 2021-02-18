@@ -838,16 +838,35 @@ class _CallList(list):
         return pprint.pformat(list(self))
 
 
+#######################################################################################################################
+# _check_and_set_parent(parent, value, name, new_name)
+# 该函数检查 value 参数是不是已经设定了 parent,
+# 如果已经设定那么就不再设定并返回False.
+# 如果没有设定那么就为value添加一组parent属性并返回True.
+#######################################################################################################################
 def _check_and_set_parent(parent, value, name, new_name):
+    """ parent: 的类型是 mock 实例. """
+
+    # 如果 value 拥有 mock 属性, 那么就把 mock 对象提取并返回, 即: value 就是一个mock对象.
+    # 如果 value 没有 mock 属性, 那么就原封不动的返回value.
     value = _extract_mock(value)
 
+    # 如果 value 不是一个mock实例, 那么就退出并返回 False.
     if not _is_instance_mock(value):
         return False
+
+    # 三组条件, 任意一个为True则退出并返回False.
+    # 挨个拆分查看其含义:
+    # (value._mock_name or value._mock_new_name): 如果value 含有 _mock_name 或 _mock_new_name 则为True.
+    # (value._mock_parent is not None):           如果 value 含有 _mock_parent 则为True.
+    # (value._mock_new_parent is not None):       如果 value 含有 _mock_new_parent 则为True.
+    # 大致含义是: 只要 value 对象 含有这四个属性, 就退出并返回False.
     if ((value._mock_name or value._mock_new_name) or
         (value._mock_parent is not None) or
         (value._mock_new_parent is not None)):
         return False
 
+    # TODO: 不知道这段代码的含义.
     _parent = parent
     while _parent is not None:
         # setting a mock (value) as a child or return value of itself
@@ -856,12 +875,16 @@ def _check_and_set_parent(parent, value, name, new_name):
             return False
         _parent = _parent._mock_new_parent
 
+    # 添加parent属性
     if new_name:
         value._mock_new_parent = parent
         value._mock_new_name = new_name
+
+    # 添加parent属性
     if name:
         value._mock_parent = parent
         value._mock_name = name
+    
     return True
 
 # Internal class to identify if we wrapped an iterator object or not.
