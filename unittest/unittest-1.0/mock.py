@@ -884,10 +884,16 @@ def _check_and_set_parent(parent, value, name, new_name):
     if name:
         value._mock_parent = parent
         value._mock_name = name
-    
+
     return True
 
+#######################################################################################################################
+# _MockIter
 # Internal class to identify if we wrapped an iterator object or not.
+#
+# 该类用于将一个集合对象设定成一个可迭代对象(iterable).
+# 由于 obj 需要是 list , tuple 这种对象, 所以也就只能for或者next, 并没有隐藏什么方法或者属性.
+#######################################################################################################################
 class _MockIter(object):
     def __init__(self, obj):
         self.obj = iter(obj)
