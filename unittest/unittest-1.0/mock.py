@@ -1424,19 +1424,35 @@ class NonCallableMock(Base):
         _name_list[0] = _first                                  # _name_list = ['mock.', 'goodmorning']
         return ''.join(_name_list)                              # 'mock.goodmorning'
 
+    ###################################################################################################################
+    # __repr__
+    # 该方法是object的内置方法, 当使用print打印当前对象时会触发这个函数, 用于定制化显示实例信息.
+    # 例如: <Mock id='10000'>                             # 实例化Mock时没有提供name参数
+    #       <Mock name='mock' id='10001'>                 # 实例化Mock时提供了name参数
+    #       <Mock name='mock.goodmorning' id='10001'>     # 子mock对象(实例化时提供了name参数)
+    #       <Mock spec='Hello' id='10003'>                # 实例化Mock时提供了spec限定对象.
+    #       <Mock spec_set='HelloStrict' id='10004'>      # 实例化Mock时提供了spec_set严格限定对象.
+    ###################################################################################################################
     def __repr__(self):
         name = self._extract_mock_name()
 
+        # 如果 name 不等于 'mock' 也不等于 'mock.' 那么 name_string 就是一个空字符串对象.
         name_string = ''
         if name not in ('mock', 'mock.'):
             name_string = ' name=%r' % name
 
+        # 如果 spec_string 是 None , 那么spec_string 就是一个空字符串对象.
         spec_string = ''
         if self._spec_class is not None:
             spec_string = ' spec=%r'
             if self._spec_set:
                 spec_string = ' spec_set=%r'
             spec_string = spec_string % self._spec_class.__name__
+
+        # type(self).__name__ 是类的名称: Mock
+        # name_string: 如果是空字符串, 那么就是留白.
+        # spec_string: 如果是空字符串, 那么就是留白.
+        # id(self): id串
         return "<%s%s%s id='%s'>" % (
             type(self).__name__,
             name_string,
