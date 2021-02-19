@@ -1685,7 +1685,11 @@ class NonCallableMock(Base):
 
         return sig
 
-
+    ###################################################################################################################
+    # _call_matcher(self, _call)
+    # 该函数用于匹配限定对象(self._spec_signature)的参数签名 或 匹配嵌套的限定对象(也是_spec_signature)的参数签名.
+    # 如果没有匹配到参数签名, 那么就原封不动的返回 _call 参数.
+    ###################################################################################################################
     def _call_matcher(self, _call):
         """
         Given a call (or simply an (args, kwargs) tuple), return a
@@ -1694,6 +1698,13 @@ class NonCallableMock(Base):
         if available, or falls back on the arguments themselves.
         """
 
+        # 当 _call 是一个 tuple 时, 它有三种形式:
+        # _Call(('name', (), {})) == ('name',)               使用_Call来做==操作比较时, 可以省略掉那些空的冗余.
+        # _Call(('name', (1,), {})) == ('name', (1,))        使用_Call来做==操作比较时, 可以省略掉那些空的冗余.
+        # _Call(((), {'a': 'b'})) == ({'a': 'b'},)           使用_Call来做==操作比较时, 可以省略掉那些空的冗余.
+        #
+        # 当 _call 大于两个对象时, 表示它肯定提供了 name, 所以下面这里使用_call[0]来取name.
+        # 除非有涉及到嵌套的对象, 否则基本上sig就是个None.
         if isinstance(_call, tuple) and len(_call) > 2:
             sig = self._get_call_signature_from_name(_call[0])
         else:
@@ -1706,7 +1717,7 @@ class NonCallableMock(Base):
             else:
                 name, args, kwargs = _call
             try:
-                return name, sig.bind(*args, **kwargs)
+                return name, sig.bind(*args, **kwargs)          # 这里通过try去测试_call与sig.bind的参数是否吻合.
             except TypeError as e:
                 return e.with_traceback(None)
         else:
