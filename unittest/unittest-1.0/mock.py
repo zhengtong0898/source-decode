@@ -873,7 +873,8 @@ def _check_and_set_parent(parent, value, name, new_name):
         (value._mock_new_parent is not None)):
         return False
 
-    # TODO: 不知道这段代码的含义.
+    # 这里是递归提取._mock_new_parent然后判断这个值是否和value相同,
+    # 如果递归提取出来的parent与value相同, 则这表示添加过parent了, 不在做添加操作.
     _parent = parent
     while _parent is not None:
         # setting a mock (value) as a child or return value of itself
