@@ -1613,7 +1613,19 @@ class NonCallableMock(Base):
         # 删除后, 标记当前name的值是一个 sentinels.DELETE 状态.
         self._mock_children[name] = _deleted
 
-
+    ###################################################################################################################
+    # _format_mock_call_signature(self, args, kwargs)
+    # 该函数用于生成参数签名.
+    #
+    # 举例:
+    # from unittest.mock import Mock
+    # m = Mock()
+    # _format_mock_call_signature(args=(), kwargs={"name": "mymock"}) 将生成 mock(name="mymock")
+    # _format_mock_call_signature(args=(), kwargs={"hello": "world"}) 将生成 mock(hello="world")
+    #
+    # 生成的mock(name="mymock") 或 mock(hello="world") 被称为是一个mock_call_signature.
+    # 生成签名的作用是: 可以拿来比较初始化提供的参数是否一样.
+    ###################################################################################################################
     def _format_mock_call_signature(self, args, kwargs):
         name = self._mock_name or 'mock'
         return _format_call_signature(name, args, kwargs)
@@ -3227,11 +3239,22 @@ class _ANY(object):
 ANY = _ANY()
 
 
-
+#######################################################################################################################
+# _format_call_signature(name, args, kwargs)
+# 该函数用户生成一个call_signature.
+#
+# _format_call_signature("hello", args=(), kwargs={"a": "one", "b": "two"})       生成 hello(a='one', b='two')
+# _format_call_signature("mock", args=(), kwargs={"a": "one", "b": "two"})        生成 mock(a='one', b='two')
+# _format_call_signature("hello", args=("3", 5), kwargs={"a": "one", "b": "two"}) 生成 hello('3', 5, a='one', b='two')
+#######################################################################################################################
 def _format_call_signature(name, args, kwargs):
     message = '%s(%%s)' % name
     formatted_args = ''
     args_string = ', '.join([repr(arg) for arg in args])
+
+    # 重点:
+    # %s 是将字符串渲染出来
+    # %r 是将'字符串'渲染出来
     kwargs_string = ', '.join([
         '%s=%r' % (key, value) for key, value in kwargs.items()
     ])
