@@ -1630,7 +1630,12 @@ class NonCallableMock(Base):
         name = self._mock_name or 'mock'
         return _format_call_signature(name, args, kwargs)
 
-
+    ###################################################################################################################
+    # _format_mock_failure_message(self, args, kwargs, action='call')
+    # 该函数用于返回通用的mock比较失败的错误消息.
+    # expected_string = self._format_mock_call_signature(args, kwargs)  期望的签名
+    # actual_string = self._format_mock_call_signature(*call_args)      实际的签名
+    ###################################################################################################################
     def _format_mock_failure_message(self, args, kwargs, action='call'):
         message = 'expected %s not found.\nExpected: %s\nActual: %s'
         expected_string = self._format_mock_call_signature(args, kwargs)
