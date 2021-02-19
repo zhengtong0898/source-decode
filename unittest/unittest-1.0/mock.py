@@ -1460,22 +1460,36 @@ class NonCallableMock(Base):
             id(self)
         )
 
-
+    ###################################################################################################################
+    # __dir__
+    # 该方法是object的内置方法, 当使用dir(mock)时会触发这个函数,
+    # 这里重新定痔了__dir__方法的返回结果: 仅显示常用的属性和方法.
+    ###################################################################################################################
     def __dir__(self):
         """Filter the output of `dir(mock)` to only useful members."""
         if not FILTER_DIR:
             return object.__dir__(self)
 
+        # self._mock_methods 通常是 spec 或 spec_set 限定对象的属性和方法的集合.
+        # 如果实例化Mock对象时没有提供spec或spec_set参数, 那么extras就是一个空列表.
         extras = self._mock_methods or []
+
+        # type(self) == <class unittest.mock.Mock>
+        # from_type == dir(unittest.mock.Mock) == 类对象的类变量和方法集合
+        # from_dict == 实例对象的属性和方法集合
+        # from_child_mocks == self._mock_children + 排除掉 sentinels.DELETE 状态的mock对象的 name的集合
         from_type = dir(type(self))
         from_dict = list(self.__dict__)
         from_child_mocks = [
             m_name for m_name, m_value in self._mock_children.items()
             if m_value is not _deleted]
 
+        # 排除掉魔法方法
         from_type = [e for e in from_type if not e.startswith('_')]
         from_dict = [e for e in from_dict if not e.startswith('_') or
                      _is_magic(e)]
+
+        # 合并和排序, 然后返回这个集合
         return sorted(set(extras + from_type + from_dict + from_child_mocks))
 
     ###################################################################################################################
