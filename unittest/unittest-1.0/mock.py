@@ -661,6 +661,13 @@ def _setup_async_mock(mock):
         setattr(mock, attribute, partial(wrapper, attribute))
 
 
+#######################################################################################################################
+# _is_magic(name)
+# 该函数用于判断 name 参数 是不是一个魔法方法, 例如:
+# '__dir__'[2:-2] 等于 'dir'
+# '__%s__' % dir 等于 '__dir__'
+# 两个相比较是相等的, 表示name参数就是一个前后两下划线的魔法方法.
+#######################################################################################################################
 def _is_magic(name):
     return '__%s__' % name[2:-2] == name
 
@@ -1117,6 +1124,9 @@ class NonCallableMock(Base):
 
             spec = dir(spec)                      # 提取spec的所有__dict__方法(字符串集合: [str, ...])
 
+        # 代码执行到这里, spec由可能是两种类型的值:
+        # 1. list
+        # 2. None
         __dict__ = self.__dict__
         __dict__['_spec_class'] = _spec_class
         __dict__['_spec_set'] = spec_set
@@ -1288,20 +1298,52 @@ class NonCallableMock(Base):
                 obj = getattr(obj, entry)
             setattr(obj, final, val)
 
-
+    ###################################################################################################################
+    # __getattr__(self, name)
+    # 该方法原本是一个object的内置方法, 用于获取那些不存在的属性.
+    # 该方法的作用时当获取不到有效属性时, 创建一个mock对象并范围这个新创建的mock对象,
+    # 同时记录下来这个不存在的属性(写入到self._mock_children字典中).
+    #
+    # from unittest.mock import Mock
+    #
+    # m = Mock()
+    # print(m)                    # mock对象:        <Mock id='1603201309712'>
+    # print(m.goodmorning)        # 返回新的mock:    <Mock name='mock.goodmorning' id='2317134082448'>
+    # print(m._mock_children)     # _mock_children: {'goodmorning': <Mock name='mock.goodmorning' id='1603209933200'>}
+    ###################################################################################################################
     def __getattr__(self, name):
+        # mock对象必须拥有'_mock_methods'和'_mock_unsafe'属性,
+        # 如果因为缺少这两个属性而触发进入到这里, 会抛出AtrributeError异常.
+        # TODO: 只要是正常实例化的mock对象在__init__里面都设定了这两个属性,
+        #       那什么场景下会把这两个属性移除掉, 从而导致进入到__getattr__方法中来?
         if name in {'_mock_methods', '_mock_unsafe'}:
             raise AttributeError(name)
+
+        # self._mock_methods 的值有两种类型: None 或 列表(dir(spec)).
+        # name not in self._mock_methods 的意思是:
+        # 如果name这个字符串参数即不再 mock 的属性范围内, 也不在限定对象spec的属性范围内, 那么就抛出异常.
         elif self._mock_methods is not None:
             if name not in self._mock_methods or name in _all_magics:
                 raise AttributeError("Mock object has no attribute %r" % name)
+
+        # name参数是不是前后双下划线的魔法方法, 如果是的花并且不在属性范围内的那么就抛出异常.
         elif _is_magic(name):
             raise AttributeError(name)
+
+        # 默认情况下: _mock_unsafe 是一个 False 值.
+        # 这里想表达的是: _mock_unsafe 是 False 时, name参数不可以是 'assert' 或 'assret' 开头的属性调用.
+        # TODO: 什么情况下 _mock_unsafe 才会是 True 呢?
         if not self._mock_unsafe:
             if name.startswith(('assert', 'assret')):
                 raise AttributeError("Attributes cannot start with 'assert' "
                                      "or 'assret'")
 
+        # 默认情况下 self._mock_children 是一个空字典, 所以result通常情况下应该是一个None.
+        # 下面这一整段代码的意思是:
+        # 从 self._mock_children这个字典中获取name的对应的值:
+        # 当值为_deleted(sentinel.DELETE)时, 就报错.
+        # 当值为None时, 就创建一个mock对象, 然后写入到 self._mock_children 字典中, 然后返回这个新创建的mock.
+        # 当值为_SpecState类时, 创建一个带有限定属性的mock对象的, 写入self._mock_children字典中, 返回这个新创建的mock.
         result = self._mock_children.get(name)
         if result is _deleted:
             raise AttributeError(name)
@@ -1316,7 +1358,7 @@ class NonCallableMock(Base):
                 parent=self, name=name, wraps=wraps, _new_name=name,
                 _new_parent=self
             )
-            self._mock_children[name]  = result
+            self._mock_children[name] = result
 
         elif isinstance(result, _SpecState):
             result = create_autospec(
