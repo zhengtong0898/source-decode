@@ -1375,33 +1375,53 @@ class NonCallableMock(Base):
 
         return result
 
-
+    ###################################################################################################################
+    # _extract_mock_name
+    # 该方法负责提取mock对象的_mock_name属性的值, 这个属性值通常情况下是在Mock实例化时的参数提供: name 或 new_name.
+    # 如果实例化时没有提供 name 或 new_name 参数值, 那么当前函数就会返回 'mock' 字符串.
+    # 如果实例化时提供了 name 或者 new_name 参数值, 那么当前函数就会收集它所有的parent. 合并返回 'parent.parent.name'
+    #
+    # 当调用不存在的属性时, OriginMock会返回一个新的NewMock对象, 并将这个对象记录在OriginMock._mock_children这个字典中.
+    # 举例:
+    # from unittest.mock import Mock
+    #
+    # m = Mock()
+    # x = m.goodmorning
+    #
+    # 说明:
+    # 变量 x 是新的Mock对象, 它的_mock_new_name是 goodmorning.
+    # 变量 m 的__dict__字典中也多了一个 goodmorning 的key, 对应存储的值是 x .
+    # 变量 m 的_mock_children字典中也多了一个 goodmorning 的key, 对应存储的值是 x .
+    #
+    # m.goodmorning 由于m这个mock对象没有goodmorning属性, 当执行这个命令时会触发 __getattr__ 方法,
+    # 在 __getattr__ 方法中使用了 _get_child_mock 方法来创建一个新的mock对象,并将其纳入 m._mock_children字典中.
+    ###################################################################################################################
     def _extract_mock_name(self):
-        _name_list = [self._mock_new_name]
-        _parent = self._mock_new_parent
-        last = self
+        _name_list = [self._mock_new_name]                      # _name_list = ['goodmorning']
+        _parent = self._mock_new_parent                         # _parent == m == <Mock id='10000'>
+        last = self                                             # last == <Mock name='mock.goodmorning' id='1002'>
 
         dot = '.'
         if _name_list == ['()']:
             dot = ''
 
         while _parent is not None:
-            last = _parent
+            last = _parent                                      # last = <Mock id='10000'>
 
-            _name_list.append(_parent._mock_new_name + dot)
+            _name_list.append(_parent._mock_new_name + dot)     # _name_list = ['goodmorning', '.']
             dot = '.'
             if _parent._mock_new_name == '()':
                 dot = ''
 
             _parent = _parent._mock_new_parent
 
-        _name_list = list(reversed(_name_list))
-        _first = last._mock_name or 'mock'
+        _name_list = list(reversed(_name_list))                 # _name_list = ['.', 'goodmorning']
+        _first = last._mock_name or 'mock'                      # _first = 'mock'
         if len(_name_list) > 1:
             if _name_list[1] not in ('()', '().'):
-                _first += '.'
-        _name_list[0] = _first
-        return ''.join(_name_list)
+                _first += '.'                                   # _first = 'mock.'
+        _name_list[0] = _first                                  # _name_list = ['mock.', 'goodmorning']
+        return ''.join(_name_list)                              # 'mock.goodmorning'
 
     def __repr__(self):
         name = self._extract_mock_name()
