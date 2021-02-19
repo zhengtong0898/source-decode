@@ -985,7 +985,7 @@ class NonCallableMock(Base):
     #                  "method_calls":            _CallList(),
     #                  "_mock_unsafe":            unsafe}
     #
-    # TODO: parent和_new_parent参数是什么意思, 什么使用场景?
+    # parent参数期望的时一个mock对象, 使用场景在__getattr__中有说明.
     #
     # spec参数期望的是一个对象, 该对象用于限定当前Mock对象的属性,
     # 即: 调用 <Mock原本的属性和方法+spec的属性和方法> 之外的任何方法都会报错.
@@ -1261,7 +1261,8 @@ class NonCallableMock(Base):
         if side_effect:
             self._mock_side_effect = None
 
-        # TODO: _mock_children 尚不知道使用场景, 先不做说明.
+        # 已经知道 _mock_children 的作用(在__getattr__中有说明).
+        # 这里只是递归的去重置 _mock_children 的属性值, 使其恢复到初始状态(并不是清空 _mock_children).
         for child in self._mock_children.values():
             if isinstance(child, _SpecState) or child is _deleted:
                 continue
@@ -1344,6 +1345,8 @@ class NonCallableMock(Base):
         # 当值为_deleted(sentinel.DELETE)时, 就报错.
         # 当值为None时, 就创建一个mock对象, 然后写入到 self._mock_children 字典中, 然后返回这个新创建的mock.
         # 当值为_SpecState类时, 创建一个带有限定属性的mock对象的, 写入self._mock_children字典中, 返回这个新创建的mock.
+        #
+        # 这里延申出来一个配对的属性, 那就是 parent 概念, 在创建新的mock时, 会将当前的mock当作parent来实例化.
         result = self._mock_children.get(name)
         if result is _deleted:
             raise AttributeError(name)
