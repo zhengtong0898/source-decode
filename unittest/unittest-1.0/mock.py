@@ -1039,7 +1039,9 @@ class NonCallableMock(Base):
         __dict__['method_calls'] = _CallList()
         __dict__['_mock_unsafe'] = unsafe
 
-        # TODO: 尚不知道具体使用场景, self.configure_mock 也看不出来是为了什么功能做伏笔.
+        # 通过kwargs去配置当前mock对象(self)的属性和值.
+        # self.configure_mock这个方法的目的是为了简化代码和简化操作,
+        # 仅通过配置即可完成对mock对象的属性和值的设定.
         if kwargs:
             self.configure_mock(**kwargs)
 
