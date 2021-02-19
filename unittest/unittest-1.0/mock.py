@@ -1405,6 +1405,7 @@ class NonCallableMock(Base):
         if _name_list == ['()']:
             dot = ''
 
+        # 递归把所有parent都提取出来, 然后把这些parent的_mock_new_name都加入到 _name_list中.
         while _parent is not None:
             last = _parent                                      # last = <Mock id='10000'>
 
