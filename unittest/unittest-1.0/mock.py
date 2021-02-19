@@ -1463,7 +1463,7 @@ class NonCallableMock(Base):
     ###################################################################################################################
     # __dir__
     # 该方法是object的内置方法, 当使用dir(mock)时会触发这个函数,
-    # 这里重新定痔了__dir__方法的返回结果: 仅显示常用的属性和方法.
+    # 这里重新定制了__dir__方法的返回结果: 仅显示常用的属性和方法.
     ###################################################################################################################
     def __dir__(self):
         """Filter the output of `dir(mock)` to only useful members."""
@@ -1571,22 +1571,46 @@ class NonCallableMock(Base):
         # 将 name 和 value 写入到Mock的属性中.
         return object.__setattr__(self, name, value)
 
-
+    ###################################################################################################################
+    # __delattr__(name)
+    # 该方法是object的内置方法, 当使用delattr(mock, attr_name)去删除
+    # mock对象的attr_name属性, 并且当attr_name不存在时会触发当前方法.
+    #
+    # 这里重新定制了__delattr__方法的,
+    # 1. 尝试删除基于 type(self) 的 unittest.mock.Mock 的类变量.
+    # 2. 尝试删除 self 这个mock实例的属性.
+    # 3. 尝试删除 self._mock_children[name] 的值.
+    # 4. 尝试新增一个标记 self._mock_children[name] = sentinels.DELETE 的值.
+    ###################################################################################################################
     def __delattr__(self, name):
+        # 尝试从 type(self) 的类中删除该属性.
+        # 当 name 属于 _all_magics 范围, 且 name 属于 type(self).__dict__ 范围
         if name in _all_magics and name in type(self).__dict__:
+            # 删除 type(self) 类对象的属性.
             delattr(type(self), name)
+
+            # 当 name 不在 self.__dict (实例)范围, 则不做后续删除动作.
             if name not in self.__dict__:
                 # for magic methods that are still MagicProxy objects and
                 # not set on the instance itself
                 return
 
+        # 尝试从当前mock实例的_mock_children中提取name这个mock子对象.
         obj = self._mock_children.get(name, _missing)
+
+        # 如果 name 在 self.__dict__ 范围, 那么就删除该属性.
         if name in self.__dict__:
             _safe_super(NonCallableMock, self).__delattr__(name)
+
+        # 如果 obj 这个子mock是sentinels.DELETE状态, 那么就报错.
         elif obj is _deleted:
             raise AttributeError(name)
+
+        # 如果 obj 这个子mock不是sentinels.MISSING时, 从self._mock_children中删除这个子mock对象.
         if obj is not _missing:
             del self._mock_children[name]
+
+        # 删除后, 标记当前name的值是一个 sentinels.DELETE 状态.
         self._mock_children[name] = _deleted
 
 
