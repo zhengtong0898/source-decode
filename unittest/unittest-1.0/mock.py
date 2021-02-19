@@ -1635,6 +1635,8 @@ class NonCallableMock(Base):
     # 该函数用于返回通用的mock比较失败的错误消息.
     # expected_string = self._format_mock_call_signature(args, kwargs)  期望的签名
     # actual_string = self._format_mock_call_signature(*call_args)      实际的签名
+    #
+    # 备注: self.call_args 是最后一次执行mock时提供的参数记录.
     ###################################################################################################################
     def _format_mock_failure_message(self, args, kwargs, action='call'):
         message = 'expected %s not found.\nExpected: %s\nActual: %s'
@@ -1643,7 +1645,18 @@ class NonCallableMock(Base):
         actual_string = self._format_mock_call_signature(*call_args)
         return message % (action, expected_string, actual_string)
 
-
+    ###################################################################################################################
+    # _get_call_signature_from_name(self, name)
+    # 该函数根据 name 参数来查找嵌套spec的signature, 这是非常抽象的场景, 具体测试使用的例子需要参考这里:
+    # https://github.com/python/cpython/commit/c96127821ebda50760e788b1213975a0d5bea37f
+    #
+    # 通常情况下这里的返回值都是None, sig也是None;
+    # 只有那些嵌套对象才会被查找到:
+    # 首先它只找 self._mock_children 中的 name, 这意味着要使用
+    # mock.meth 这种不存在的对象(它触发了__getattr__才会创建子mock对象并写入到self._mock_children);
+    # 不仅如此, 它还要求这个子mock对象要提供spec限定对象参数, 才会提取出一个有效的signature.
+    # 因此综合评估下来这个使用场景太少了.
+    ###################################################################################################################
     def _get_call_signature_from_name(self, name):
         """
         * If call objects are asserted against a method/function like obj.meth1
@@ -1656,19 +1669,19 @@ class NonCallableMock(Base):
         and can be safely exited.
         """
         if not name:
-            return self._spec_signature
+            return self._spec_signature                     # 如果没提供spec实例对象, 那么这里就是None
 
         sig = None
-        names = name.replace('()', '').split('.')
+        names = name.replace('()', '').split('.')           # 处理name: 移除'()' 和 分割 '.', names是一个列表对象
         children = self._mock_children
 
         for name in names:
-            child = children.get(name)
+            child = children.get(name)                      # 通过 name 在 self._mock_children 中找到对应的子mock对象
             if child is None or isinstance(child, _SpecState):
                 break
             else:
                 children = child._mock_children
-                sig = child._spec_signature
+                sig = child._spec_signature                 # 将子mock对象的._spec_signature赋值给sig
 
         return sig
 
