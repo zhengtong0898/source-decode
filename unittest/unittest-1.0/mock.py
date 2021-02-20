@@ -1562,8 +1562,8 @@ class NonCallableMock(Base):
             if _check_and_set_parent(self, value, name, name):
                 self._mock_children[name] = value
 
-        # 默认情况下, self._mock_sealed 是 False, 所以这个条件只有在特殊情况下才会匹配到.
-        # TODO: self._mock_sealed 没搞明白, 后续通过观察 test 看看使用场景.
+        # 当 self._mock_sealed 是 False 时, 表示当访问不存在的属性时创建子mock并返回该子mock对象.
+        # 当 self._mock_sealed 是 True 时, 表示当访问不存在的属性时不创建子mock对象并抛出异常.
         if self._mock_sealed and not hasattr(self, name):
             mock_name = f'{self._extract_mock_name()}.{name}'
             raise AttributeError(f'Cannot set {mock_name}')
@@ -1936,6 +1936,10 @@ class NonCallableMock(Base):
                 '%s call not found' % expected_string
             ) from cause
 
+    ###################################################################################################################
+    # _get_child_mock(self, /, **kw)
+    # 该方法用于创建一个子mock对象.
+    ###################################################################################################################
     def _get_child_mock(self, /, **kw):
         """Create the child mocks for attributes and return value.
         By default child mocks will be the same type as the parent.
@@ -1944,29 +1948,50 @@ class NonCallableMock(Base):
 
         For non-callable mocks the callable variant will be used (rather than
         any custom subclass)."""
+
+        # _new_name 有几个场景, 其中一个我已知的是:
+        # 当使用 mock.foo 并且 mock 对象不存在 foo 属性或方法时,
+        # 就尝试使用这个foo当作_new_name来创建一个子mock对象.
         _new_name = kw.get("_new_name")
+
+        # _spec_asyncs 是一个限定对象的异步方法,
+        # 如果 _new_name 与限定对象的方法名一致, 那么就实例化并返回一个 AsyncMock 对象.
         if _new_name in self.__dict__['_spec_asyncs']:
             return AsyncMock(**kw)
 
+        # 当前实例的类对象, 举例: <class unittest.mock.Mock>
+        # 重点: 下面这段代码定义了 AsyncMock , MagicMock, Mock 的关系树.
         _type = type(self)
+
+        # 如果当前类对象继承了MagicMock 并且 _new_name 属于 _async_method_magics 范围, 那么 klass 就是一个 AsyncMock 类对象.
         if issubclass(_type, MagicMock) and _new_name in _async_method_magics:
             # Any asynchronous magic becomes an AsyncMock
             klass = AsyncMock
+
+        # 当前类对象继承了AsyncMockMixin.
         elif issubclass(_type, AsyncMockMixin):
+            # Any synchronous method on AsyncMock becomes a MagicMock
+            # 继承了AsyncMockMixin的类的对象如果含有任意同步的方法, 那么这个类就属于MagicMock类.
+            # 重点: 这就是 MagicMock 的定义.
             if (_new_name in _all_sync_magics or
                     self._mock_methods and _new_name in self._mock_methods):
                 # Any synchronous method on AsyncMock becomes a MagicMock
                 klass = MagicMock
+            # 继承了AsyncMockMixin的类的对象不包含任何同步的方法, 那么这个类就属于AsyncMock类.
             else:
                 klass = AsyncMock
+
         elif not issubclass(_type, CallableMixin):
             if issubclass(_type, NonCallableMagicMock):
                 klass = MagicMock
             elif issubclass(_type, NonCallableMock):
                 klass = Mock
+
         else:
             klass = _type.__mro__[1]
 
+        # 当 self._mock_sealed 是 False 时, 表示当访问不存在的属性时创建子mock并返回该子mock对象.
+        # 当 self._mock_sealed 是 True 时, 表示当访问不存在的属性时不创建子mock对象并抛出异常.
         if self._mock_sealed:
             attribute = "." + kw["name"] if "name" in kw else "()"
             mock_name = self._extract_mock_name() + attribute
@@ -3934,6 +3959,14 @@ class PropertyMock(Mock):
         self(val)
 
 
+#######################################################################################################################
+# seal(mock)
+# 该函数用于关闭自动生成子mock对象(递归关闭所有子mock对象的自动生成子mock功能).
+#
+# 说明:
+# 由于 mock 的 __getattr__ 机制 会在访问 mock 不存在的属性时, 创建一个子mock对象,
+# 所以这里提供了 seal 方法, 用于关闭这个自动创建子mock对象的功能.
+#######################################################################################################################
 def seal(mock):
     """Disable the automatic generation of child mocks.
 
