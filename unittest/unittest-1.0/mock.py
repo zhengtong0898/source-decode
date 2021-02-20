@@ -1723,6 +1723,16 @@ class NonCallableMock(Base):
         else:
             return _call
 
+    ###################################################################################################################
+    # assert_not_called(self)
+    # 该方法用于断言当前mock对象没有被调用过.
+    #
+    # 由于每次调用mock实例对象, 它内部都会调用CallableMixin._increment_mock_call方法
+    # 来记录一些统计信息, 其中就包括self.call_count的递增, 用于表示当前这个mock实例对象被调用过多少次.
+    #
+    # 如果 self.call_count == 0 则表示当前mock实例对象没有被调用过, 不会报错, 也不会返回任何值.
+    # 如果 self.call_count != 0 则表示当前mock实例对象已经被调用过, 这是就会抛出异常.
+    ###################################################################################################################
     def assert_not_called(self):
         """assert that the mock was never called.
         """
@@ -1733,6 +1743,12 @@ class NonCallableMock(Base):
                       self._calls_repr()))
             raise AssertionError(msg)
 
+    ###################################################################################################################
+    # assert_called(self)
+    # 该方法用于断言当前mock对象已经调用过.
+    #
+    # self.call_count == 0 则表示当前mock实例对象没有被调用过.
+    ###################################################################################################################
     def assert_called(self):
         """assert that the mock was called at least once
         """
@@ -1741,6 +1757,12 @@ class NonCallableMock(Base):
                    (self._mock_name or 'mock'))
             raise AssertionError(msg)
 
+    ###################################################################################################################
+    # assert_called_once(self)
+    # 该方法用于断言当前mock对象仅调用过一次.
+    #
+    # self.call_count == 1 则表示当前mock实例对象仅调用过一次.
+    ###################################################################################################################
     def assert_called_once(self):
         """assert that the mock was called only once.
         """
