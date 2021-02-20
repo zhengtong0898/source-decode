@@ -2187,7 +2187,10 @@ class CallableMixin(Base):
         return self.return_value
 
 
-
+#######################################################################################################################
+# class Mock(CallableMixin, NonCallableMock)
+# 该类是一个空类, 其作用是一个helper类对象, 简化使用者的使用和理解成本.
+#######################################################################################################################
 class Mock(CallableMixin, NonCallableMock):
     """
     Create a new `Mock` object. `Mock` takes several optional arguments
