@@ -1999,7 +1999,12 @@ class NonCallableMock(Base):
 
         return klass(**kw)
 
-
+    ###################################################################################################################
+    # _calls_repr(self, prefix="Calls")
+    # 该方法用于返回一个格式化的字符串, 格式为:
+    # "\nCalls: [call(1), call(2), call(3), call(4 [truncated]..."
+    # 这里使用了 safe_repr 来限定输出的长度为80, 超出80用 ' [truncated]...' 来显示.
+    ###################################################################################################################
     def _calls_repr(self, prefix="Calls"):
         """Renders self.mock_calls as a string.
 
