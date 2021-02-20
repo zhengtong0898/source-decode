@@ -1719,7 +1719,7 @@ class NonCallableMock(Base):
             try:
                 return name, sig.bind(*args, **kwargs)          # 这里通过try去测试_call与sig.bind的参数是否吻合.
             except TypeError as e:
-                return e.with_traceback(None)
+                return e.with_traceback(None)                   # 这里返回一个Exception
         else:
             return _call
 
@@ -1804,7 +1804,10 @@ class NonCallableMock(Base):
             cause = expected if isinstance(expected, Exception) else None
             raise AssertionError(_error_message()) from cause
 
-
+    ###################################################################################################################
+    # assert_called_once_with(self, /, *args, **kwargs)
+    # 该方法用于断言当前mock对象是否仅被调用过一次并且调用的参数与当前方法提供的参数一致.
+    ###################################################################################################################
     def assert_called_once_with(self, /, *args, **kwargs):
         """assert that the mock was called exactly once and that that call was
         with the specified arguments."""
@@ -1816,7 +1819,13 @@ class NonCallableMock(Base):
             raise AssertionError(msg)
         return self.assert_called_with(*args, **kwargs)
 
-
+    ###################################################################################################################
+    # assert_has_calls(self, calls, any_order=False)
+    # 该方法用于断言当前mock对象的历史调用记录(self.mock_calls)是否包含calls参数, 如果包含则表示都调用过了.
+    # 该方法提供了 any_order 参数, 表示其支持两种比较算法:
+    # any_order == False 时, 采用连续性匹配算法.
+    # any_order == True 时, 采用非连续性匹配算法.
+    ###################################################################################################################
     def assert_has_calls(self, calls, any_order=False):
         """assert the mock has been called with the specified calls.
         The `mock_calls` list is checked for the calls.
@@ -1827,33 +1836,67 @@ class NonCallableMock(Base):
 
         If `any_order` is True then the calls can be in any order, but
         they must all appear in `mock_calls`."""
+
+        # expected: list; 尝试提取嵌套的对象的执行参数, 如果没有嵌套对象, 那就圆路返回该参数.
         expected = [self._call_matcher(c) for c in calls]
+
+        # (e for e in expected if isinstance(e, Exception): 遍历expected列表是否存在异常信息(那些签名与调用的签名不吻合).
+        # next(iterator, None): 提取第一个错误的信息.
+        # cause: 是一个异常信息对象 或 None 对象.
         cause = next((e for e in expected if isinstance(e, Exception)), None)
+
+        # self.mock_calls 是一个列表, 用于存储历史调用记录.
         all_calls = _CallList(self._call_matcher(c) for c in self.mock_calls)
+
+        # any_order == False, 表示: 要求连续性的匹配.
         if not any_order:
+
+            # 由于 all_calls 是 _CallList 对象, 所以 这里的 in 操作会
+            # 触发 _CallList 对象的__contains__方法来完成连续性匹配.
+            # 然后根据返回值来与 not 关键字进行判断; 即:
+            # expected 这列表如果连续性匹配all_calls不成立, 那么就抛出异常.
             if expected not in all_calls:
+
+                # 当 cause 是 None 时, 表示 expected 列表没有异常;
+                # 那么它就仅抛出没有找到连续性calls错误信息.
                 if cause is None:
                     problem = 'Calls not found.'
+
+                # 当 cause 不是 None 时, 表示 expected 列表存在异常;
+                # 列出异常对象列表(主要体现在数量上)的错误信息.
                 else:
                     problem = ('Error processing expected calls.\n'
                                'Errors: {}').format(
                                    [e if isinstance(e, Exception) else None
                                     for e in expected])
+
+                # 抛出异常; raise AssertionError from cause
                 raise AssertionError(
                     f'{problem}\n'
                     f'Expected: {_CallList(calls)}'
                     f'{self._calls_repr(prefix="Actual").rstrip(".")}'
                 ) from cause
+
+            # expected in all_calls: 连续性匹配命中; 退出函数
             return
 
+        # any_order == True, 表示: 不要求连续性的匹配.
+        # list(all_calls): 将 _CallList 对象转换成常规的list对象.
         all_calls = list(all_calls)
 
+        # 遍历expected, 用每个kall元素去尝试从 all_calls 移除 kall 对象,
+        # 如果单个移除成功, 那么就表示单个元素匹配成功.
+        # 如果全部移除成功, 那么就表示非连续性的匹配成功.
+        # 如果任意一个元素移除失败, 那么就表示匹配失败.
         not_found = []
         for kall in expected:
             try:
                 all_calls.remove(kall)
             except ValueError:
                 not_found.append(kall)
+
+        # 如果 not_found 列表不为空, 那么就表示有至少一个元素移除失败, 那么就表示匹配失败了.
+        # 这是就需要排除异常: raise AssertionError from cause
         if not_found:
             raise AssertionError(
                 '%r does not contain all of %r in its call list, '
