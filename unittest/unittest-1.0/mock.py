@@ -1904,22 +1904,37 @@ class NonCallableMock(Base):
                                       tuple(not_found), all_calls)
             ) from cause
 
-
+    ###################################################################################################################
+    # assert_any_call(self, /, *args, **kwargs)
+    # 该方法用于断言当前mock对象的历史调用记录中是否有某个签名参数与当前签名参数一致.
+    # 唧唧歪歪: 感觉函数名 assert_has_called 更容易明白是什么意思.
+    ###################################################################################################################
     def assert_any_call(self, /, *args, **kwargs):
         """assert the mock has been called with the specified arguments.
 
         The assert passes if the mock has *ever* been called, unlike
         `assert_called_with` and `assert_called_once_with` that only pass if
         the call is the most recent one."""
+
+        # expected 是单个对象, 而且只提供两个参数.
         expected = self._call_matcher((args, kwargs))
+
+        # 这里为什么使用 self._call_args_list 而不是使用 self.mock_calls ?
+        # 主要的原因是: 这里不关注嵌套限定对象, 而只关注限定对象,
+        # 即: 仅尝试从 mock 的 self.spec_signature 来验证签名一致性.
+        # 另外的原因是: expected是两个参数的_Call,
+        # 而self.mock_calls的_Call是三个参数(含name),
+        # 而 self.call_args_list 的_Call是两个参数,
+        # 所以这里采用 self.call_args_list 来当作比较对象.
         actual = [self._call_matcher(c) for c in self.call_args_list]
+
+        # 如果 expected 对象不在 actual(历史调用记录) 中, 那么就抛出异常.
         if expected not in actual:
             cause = expected if isinstance(expected, Exception) else None
             expected_string = self._format_mock_call_signature(args, kwargs)
             raise AssertionError(
                 '%s call not found' % expected_string
             ) from cause
-
 
     def _get_child_mock(self, /, **kw):
         """Create the child mocks for attributes and return value.
