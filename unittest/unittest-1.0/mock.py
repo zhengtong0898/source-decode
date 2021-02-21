@@ -2791,6 +2791,15 @@ def _patch_multiple(target, spec=None, create=False, spec_set=None,
     return patcher
 
 
+#######################################################################################################################
+# patch(target, new=DEFAULT, spec=None, create=False, spec_set=None, autospec=None, new_callable=None, **kwargs)
+# 该函数用于当作装饰器来替换target对象,
+# 如果提供了new参数, 那么就把target对象替换成new对象.
+# 如果没有提供new参数, 那么就会把target对象替换成MagicMock对象或AsyncMock对象.
+#
+# patch本身只是一个函数, 并不具备装饰器能力, 因为它并没有接收 function 参数(python会将被装饰的对象传递进来),
+# 之所以能被当作装饰器使用, 是因为它返回的_patch类中定义了__call__(self, func)来接收function参数.
+#######################################################################################################################
 def patch(
         target, new=DEFAULT, spec=None, create=False,
         spec_set=None, autospec=None, new_callable=None, **kwargs
