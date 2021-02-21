@@ -2353,6 +2353,12 @@ def _importer(target):
     return thing
 
 
+#######################################################################################################################
+# _is_started(patcher)
+# 该函数用于检查和判断 patcher 对象是否拥有 is_local 属性,
+# 如果已经拥有 is_local 属性则表示这个patcher已经执行过 start 方法了.
+# 如果尚未拥有 is_local 属性则表示这个patcher还没有执行过 start 方法.
+#######################################################################################################################
 def _is_started(patcher):
     # XXXX horrible
     return hasattr(patcher, 'is_local')
