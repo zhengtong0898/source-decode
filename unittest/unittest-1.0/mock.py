@@ -2243,20 +2243,111 @@ class Mock(CallableMixin, NonCallableMock):
     """
 
 
+#######################################################################################################################
+# _dot_lookup(thing, comp, import_path)
+# 从thing参数中提取comp属性.
+#######################################################################################################################
 def _dot_lookup(thing, comp, import_path):
     try:
+        # 尝试从thing参数(当前级模块)中提取comp属性
         return getattr(thing, comp)
     except AttributeError:
+        # 如果提取失败那么尝试加载下一级模块并从下一级模块中提取comp属性并返回
+        #
+        # 踩坑:
+        # 这里重新按照 import_path 再去加载下一级模块, 但是并没有赋值给thing.
+        # 但是经过测试加载下一级模块会持续更新到thing变量中.
         __import__(import_path)
         return getattr(thing, comp)
 
 
+#######################################################################################################################
+# _importer(target)
+# 该函数用于将字符串导入成module对象.
+#######################################################################################################################
 def _importer(target):
     components = target.split('.')
     import_path = components.pop(0)
+
+    # 踩坑:
+    # __import__ 有个特点: 如果当前文件有使用了 import 语句导入了与 import_path
+    #                     字符串一样的模块, 那么__import__也会将这个子模块纳入到thing模块中, 举例说明:
+    #
+    # 常规情况下, 使用 __import__('unittest') 它并不会去包含 mock 属性,
+    # 因为 unittest.__init__.py 文件中并没有声明 mock 对象, 举例:
+    #
+    # def main():
+    #     thing = __import__('unittest')
+    #     print(thing)
+    #     print(dir(thing))
+    #
+    # if __name__ == '__main__':
+    #     main()
+    #
+    # 输出结果中并不包含mock对象:
+    # <module 'unittest' from 'C:\\Python38\\lib\\unittest\\__init__.py'>
+    # ['BaseTestSuite', 'FunctionTestCase', 'IsolatedAsyncioTestCase', 'SkipTest', 'TestCase', 'TestLoader',
+    # 'TestProgram', 'TestResult', 'TestSuite', 'TextTestResult', 'TextTestRunner', '_TextTestResult', '__all__',
+    # '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__path__',
+    # '__spec__', '__unittest', 'addModuleCleanup', 'async_case', 'case', 'defaultTestLoader', 'expectedFailure',
+    # 'findTestCases', 'getTestCaseNames', 'installHandler', 'load_tests', 'loader', 'main', 'makeSuite',
+    # 'registerResult', 'removeHandler', 'removeResult', 'result', 'runner', 'signals', 'skip', 'skipIf',
+    # 'skipUnless', 'suite', 'util']
+    #
+    #
+    # 但是如果当前文件头部使用了 import unittest.mock 语句, 那么 __import__('unittest') 的返回结果中,
+    # 就会包含 mock 属性, 它内部的算法应该时把当前环境变量中前缀一样的变量纳入到返回对象中, 举例:
+    #
+    # import unittest
+    # def ssse(): pass
+    # unittest.ssse = ssse                          # 必须是函数, 如果是变量那么__import__不会纳入到返回对象中.
+    #
+    # def main():
+    #     thing = __import__('unittest')
+    #     print(thing)
+    #     print(dir(thing))
+    #
+    # if __name__ == '__main__':
+    #     main()
+    #
+    # 输出结果中包含了ssse:
+    # <module 'unittest' from 'C:\\Python38\\lib\\unittest\\__init__.py'>
+    # ['BaseTestSuite', 'FunctionTestCase', 'IsolatedAsyncioTestCase', 'SkipTest', 'TestCase', 'TestLoader',
+    # 'TestProgram', 'TestResult', 'TestSuite', 'TextTestResult', 'TextTestRunner', '_TextTestResult', '__all__',
+    # '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__path__',
+    # '__spec__', '__unittest', 'addModuleCleanup', 'async_case', 'case', 'defaultTestLoader', 'expectedFailure',
+    # 'findTestCases', 'getTestCaseNames', 'installHandler', 'load_tests', 'loader', 'main', 'makeSuite',
+    # 'registerResult', 'removeHandler', 'removeResult', 'result', 'runner', 'signals', 'skip', 'skipIf',
+    # 'skipUnless', 'ssse', 'suite', 'util']
     thing = __import__(import_path)
 
+    # 为了保守起见, 这里以穷尽的形式去尝试加载模块, 例如:
+    # target = 'unittest.test.testmock.testpatch'
+    # import_path = 'unittest'
+    # components: ['test', 'testmock', 'testpatch']
     for comp in components:
+        # 第一次遍历
+        # comp = 'test'
+        # import_path = 'unittest.test'
+        # thing = _do_lookup(<module 'unittest' from '..\\unittest\\__init__.py'>, 'test', 'unittest.test')
+        # thing: <module 'unittest.test' from '..\\unittest\\test\\__init__.py'>
+        #
+        # 第二次遍历
+        # comp = 'testmock'
+        # import_path = 'unittest.test.testmock'
+        # thing = _do_lookup(<module 'unittest.test' from '..\\unittest\\test\\__init__.py'>,
+        #                    'testmock',
+        #                    'unittest.test.testmock')
+        # thing: <module 'unittest.test.testmock' from '..\\unittest\\test\\testmock\\__init__.py'>
+        #
+        # 第三次遍历
+        # comp = 'testpatch'
+        # import_path = 'unittest.test.testmock.testpatch'
+        # thing = _do_lookup(<module 'unittest.test.testmock' from '..\\unittest\\test\\testmock\\__init__.py'>,
+        #                    'testpatch',
+        #                    'unittest.test.testmock.testpatch')
+        # thing: <module 'unittest.test.testmock.testpatch' from
+        #        'C:\\Python38\\lib\\unittest\\test\\testmock\\testpatch.py'>
         import_path += ".%s" % comp
         thing = _dot_lookup(thing, comp, import_path)
     return thing
@@ -2597,13 +2688,21 @@ class _patch(object):
         return self.__exit__()
 
 
-
+#######################################################################################################################
+# _get_target(target)
+# 该函数用于拆分模块和对象.
+# 返回值: 模块(类型: lambda), 对象(类型: 字符串)
+#######################################################################################################################
 def _get_target(target):
+    # talist = 'unittest.mock.Mock'.rsplit(sep='.', maxsplit=1)
+    # talist == ['unittest.mock', 'Mock']
     try:
         target, attribute = target.rsplit('.', 1)
     except (TypeError, ValueError):
         raise TypeError("Need a valid target to patch. You supplied: %r" %
                         (target,))
+
+    # TODO: 为什么这里要写一个lambda, 而不是即时导入得到结果?
     getter = lambda: _importer(target)
     return getter, attribute
 
