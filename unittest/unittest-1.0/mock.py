@@ -2369,10 +2369,17 @@ class _patch(object):
     attribute_name = None
     _active_patches = []
 
+    ###################################################################################################################
+    # __init__
+    # 该方法例行检查参数new_callable和new/autospec参数是否冲突, 其他就是将参数赋值到self实例中(同名).
+    ###################################################################################################################
     def __init__(
             self, getter, attribute, new, spec, create,
             spec_set, autospec, new_callable, kwargs
         ):
+
+        # new_callable 参数 和 new / autospec 参数同时设定会发生冲突.
+        # TODO: 需要说明为什么会发生冲突.
         if new_callable is not None:
             if new is not DEFAULT:
                 raise ValueError(
@@ -2395,7 +2402,15 @@ class _patch(object):
         self.kwargs = kwargs
         self.additional_patchers = []
 
-
+    ###################################################################################################################
+    # copy(self)
+    # 该方法用于复制patch对象.
+    # 复制的逻辑是:
+    # 1. 将 self 的属性来重新创建一个_patch对象.
+    # 2. 将 self 的 attribute_name 赋值给 新patch 对象.
+    # 3. 递归赋值 self.addtional_patchers 给 新patch.addtional_patchers;
+    #    这里采用 p.copy() for p in self.addtional_patchers 的方式, 实现了deep-copy, 而不是shadow-copy.
+    ###################################################################################################################
     def copy(self):
         patcher = _patch(
             self.getter, self.attribute, self.new, self.spec,
@@ -2408,14 +2423,22 @@ class _patch(object):
         ]
         return patcher
 
-
+    ###################################################################################################################
+    # __call__(self, func)
+    # 该方法是一个魔法方法, p = _patch(*args, **kwargs); p(); 第二步的p()就会触发__call__方法.
+    # 该方法的作用是被当作装饰器来使用(因为它的参数 func 就是为了接收函数), 作为patch的入口, 通过该入口延申完成替换对象的创建.
+    ###################################################################################################################
     def __call__(self, func):
+        # 当 func 类型是 type 时, 说明它是一个类对象.
         if isinstance(func, type):
             return self.decorate_class(func)
+
+        # 当 func 类型时 async function 时, 说明他时一个异步函数对象.
         if inspect.iscoroutinefunction(func):
             return self.decorate_async_callable(func)
-        return self.decorate_callable(func)
 
+        # 当 func 类型是 function 时, 说明他是一个函数对象.
+        return self.decorate_callable(func)
 
     def decorate_class(self, klass):
         for attr in dir(klass):
