@@ -2890,6 +2890,12 @@ def _patch_object(
     )
 
 
+#######################################################################################################################
+# _patch_multiple(target, spec=None, create=False, spec_set=None,
+#                 autospec=None, new_callable=None, **kwargs)
+# 该函数用于创建多个patch, 即: 替换多个函数或方法.
+# 根据kwargs参数来创建patch, 取任意一组item来当作主patch, 其他的当作副patch放在主patch.additional_patchers中.
+#######################################################################################################################
 def _patch_multiple(target, spec=None, create=False, spec_set=None,
                     autospec=None, new_callable=None, **kwargs):
     """Perform multiple patches in a single call. It takes the object to be
@@ -2912,8 +2918,12 @@ def _patch_multiple(target, spec=None, create=False, spec_set=None,
     When used as a class decorator `patch.multiple` honours `patch.TEST_PREFIX`
     for choosing which methods to wrap.
     """
+
+    # 如果 target 是字符串, 那么就采用 _importer 去加载具体模块
     if type(target) is str:
         getter = lambda: _importer(target)
+
+    # 如果不是字符串, 就视为是 module 对象.
     else:
         getter = lambda: target
 
@@ -2921,7 +2931,9 @@ def _patch_multiple(target, spec=None, create=False, spec_set=None,
         raise ValueError(
             'Must supply at least one keyword argument with patch.multiple'
         )
+
     # need to wrap in a list for python 3, where items is a view
+    # 第一个元素用来生成替换对象: 主patcher.
     items = list(kwargs.items())
     attribute, new = items[0]
     patcher = _patch(
@@ -2929,6 +2941,9 @@ def _patch_multiple(target, spec=None, create=False, spec_set=None,
         autospec, new_callable, {}
     )
     patcher.attribute_name = attribute
+
+    # 第二个和后续的元素, 用来创建其他(副)mock对象,
+    # 然后将这些mock对象纳入到主patcher.additional_patchers中.
     for attribute, new in items[1:]:
         this_patcher = _patch(
             getter, attribute, new, spec, create, spec_set,
@@ -2936,6 +2951,8 @@ def _patch_multiple(target, spec=None, create=False, spec_set=None,
         )
         this_patcher.attribute_name = attribute
         patcher.additional_patchers.append(this_patcher)
+
+    # 返回主 patcher
     return patcher
 
 
