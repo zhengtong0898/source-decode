@@ -2560,8 +2560,13 @@ class _patch(object):
         patched.patchings = [self]
         return patched
 
-
+    ###################################################################################################################
+    # get_original(self)
+    # 该方法用于提取 _get_target 没有直接提取的结果.
+    ###################################################################################################################
     def get_original(self):
+        # target 是一个 module 对象
+        # name 是这个 module 对象中的一个函数/类/方法的名字
         target = self.getter()
         name = self.attribute
 
@@ -2569,22 +2574,30 @@ class _patch(object):
         local = False
 
         try:
+            # 从 target 模块中提取 name 这个类对象.
             original = target.__dict__[name]
         except (AttributeError, KeyError):
             original = getattr(target, name, DEFAULT)
         else:
+            # local == True 表示 从 target 这模块中获取 name 这个方法是无报错的.
+            # 当 local == True 时, original也是一个具体的类.
             local = True
 
         if name in _builtins and isinstance(target, ModuleType):
             self.create = True
 
+        # 如果 name 即不是内置函数名, 也不是target模块中的 函数/类/方法 的名字, 那么就抛出异常.
         if not self.create and original is DEFAULT:
             raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
+
         return original, local
 
-
+    ###################################################################################################################
+    # __enter__(self)
+    # 创建mock对象, 用于替换patch时提供的原函数字符串参数.
+    ###################################################################################################################
     def __enter__(self):
         """Perform the patch."""
         new, spec, spec_set = self.new, self.spec, self.spec_set
@@ -2600,55 +2613,92 @@ class _patch(object):
         if autospec is False:
             autospec = None
 
+        # spec 和 autospec 这两个参数不可以同时提供.
         if spec is not None and autospec is not None:
             raise TypeError("Can't specify spec and autospec")
+
+        # 由于上面 spec_set is False 时, spec_set 被设定为 None.
+        # 所以: 当 spec_set 不是 True 也不是None 时, 一定是一个类对象.
+        #
+        # 如果 spec_set 和 spec 参数同时提供, 那么就报错.
+        # 如果 spec_set 和 autospec 参数同时提供, 那么就报错.
         if ((spec is not None or autospec is not None) and
             spec_set not in (True, None)):
             raise TypeError("Can't provide explicit spec_set *and* spec or autospec")
 
+        # 提取 _get_target 没有直接提取的结果.
+        # original 将会被写入到 spec 或 spec_set 限定对象.
         original, local = self.get_original()
 
+        # 这是最常见的条件入口: 当new是默认值, autospec是None时(也是默认值), 进入这个条件块.
         if new is DEFAULT and autospec is None:
             inherit = False
+
+            # 如果 spec 限定参数是True, 那么就将original这个对象当作 spec 对象.
             if spec is True:
                 # set spec to the object we are replacing
                 spec = original
+                # 如果 spec 和 spec_set 同时都设定为True, 那么就以 spec_set 为主.
                 if spec_set is True:
                     spec_set = original
                     spec = None
+
+            # 如果 spec 不是True, 也不是 None, 那就是一个对象.
             elif spec is not None:
+                # 如果 spec_set 是 True, 那么就以 spec_set 为主.
                 if spec_set is True:
                     spec_set = spec
                     spec = None
+
+            # 如果 spec_set 是 True, 那么就以 spec_set 为主.
             elif spec_set is True:
                 spec_set = original
 
+            # TODO: 看不懂
             if spec is not None or spec_set is not None:
                 if original is DEFAULT:
                     raise TypeError("Can't use 'spec' with create=True")
                 if isinstance(original, type):
                     # If we're patching out a class and there is a spec
                     inherit = True
+
+            # 如果 original (被替换的对象) 是一个异步对象, 那么就准备 AsyncMock 对象.
             if spec is None and _is_async_obj(original):
                 Klass = AsyncMock
             else:
                 Klass = MagicMock
+
             _kwargs = {}
+
+            # new_callable 的优先级高于 spec 和 spec_set.
             if new_callable is not None:
                 Klass = new_callable
+
+            # 如果 spec 或 spec_set 是一个对象.
             elif spec is not None or spec_set is not None:
                 this_spec = spec
                 if spec_set is not None:
                     this_spec = spec_set
+
+                # 如果 this_spec 是一个列表或元组, 那么表示它是一个 dir() 列表,
+                # 如果 __call__ 不在 dir() 范围内， 表示这个spec是不可调用对象.
                 if _is_list(this_spec):
                     not_callable = '__call__' not in this_spec
+
+                # 如果 this_spec 是一个对象.
+                # 如果 this_spec 不可调用,
                 else:
                     not_callable = not callable(this_spec)
+
+                # 如果 this_spec 是一个异步对象, 那么 klass 是 AsyncMock
                 if _is_async_obj(this_spec):
                     Klass = AsyncMock
+
+                # 如果 not_callable 为True, 那么klass 就是 NonCallableMagicMock
                 elif not_callable:
                     Klass = NonCallableMagicMock
 
+            # 接下来的代码是为 klass 准备参数.
             if spec is not None:
                 _kwargs['spec'] = spec
             if spec_set is not None:
@@ -2659,9 +2709,12 @@ class _patch(object):
                 issubclass(Klass, NonCallableMock) and self.attribute):
                 _kwargs['name'] = self.attribute
 
+            # 实例化一个mock, original 会被写入到 _kwargs['spec'] 或 _kwargs['spec_set'] 中当作参数传递给mock.
+            # 即: mock 虽然是一个替代对象, 但也仍然保留了原始对象在 spec
             _kwargs.update(kwargs)
             new = Klass(**_kwargs)
 
+            # TODO: 待补充
             if inherit and _is_instance_mock(new):
                 # we can only tell if the instance should be callable if the
                 # spec is not a list
@@ -2675,6 +2728,8 @@ class _patch(object):
                 _kwargs.pop('name')
                 new.return_value = Klass(_new_parent=new, _new_name='()',
                                          **_kwargs)
+
+        # 如果提供了 autospec 参数, 将会采用 create_autospec 来创建 mock 对象.
         elif autospec is not None:
             # spec is ignored, new *must* be default, spec_set is treated
             # as a boolean. Should we check spec is not None and that spec_set
@@ -2697,11 +2752,20 @@ class _patch(object):
             # XXXX If new is a Mock we could call new.configure_mock(**kwargs)
             raise TypeError("Can't pass kwargs to a mock we aren't creating")
 
+        # new 是已经实例化的mock对象.
         new_attr = new
 
+        # original 除了留存在 mock.spec 中, 也会留存在 _patch.temp_original 中.
         self.temp_original = original
+
+        # self.is_local 用于标记已经执行过 __enter__ 了.
         self.is_local = local
+
+        # self.target 是一个module.
+        # 这里将 这个mock 对象写入到 self.target[self.attribute] = new_attr 中.
         setattr(self.target, self.attribute, new_attr)
+
+        # TODO: 待补充
         if self.attribute_name is not None:
             extra_args = {}
             if self.new is DEFAULT:
@@ -2712,9 +2776,18 @@ class _patch(object):
                     extra_args.update(arg)
             return extra_args
 
+        # 返回 mock 对象.
         return new
 
-
+    ###################################################################################################################
+    # __exit__(self, *exc_info)
+    # 回滚patch替换.
+    # 1. 将 self.target 这个module 中的 self.attribute(原始函数名) 名字恢复成 self.temp_original(原始函数) 函数.
+    # 2. 删除 self.temp_original
+    # 3. 删除 self.is_local
+    # 4. 删除 self.target 模块
+    # 5. 递归回滚所有子patcher
+    ###################################################################################################################
     def __exit__(self, *exc_info):
         """Undo the patch."""
         if not _is_started(self):
@@ -2738,14 +2811,20 @@ class _patch(object):
             if _is_started(patcher):
                 patcher.__exit__(*exc_info)
 
-
+    ###################################################################################################################
+    # start(self)
+    # 该方法用于那些不采用 with 的场景(即: 装饰器)来返回mock对象.
+    ###################################################################################################################
     def start(self):
         """Activate a patch, returning any created mock."""
         result = self.__enter__()
         self._active_patches.append(self)
         return result
 
-
+    ###################################################################################################################
+    # stop(self)
+    # 该方法用于那些不采用 with 的场景(即: 装饰器)来返回mock对象.
+    ###################################################################################################################
     def stop(self):
         """Stop an active patch."""
         try:
