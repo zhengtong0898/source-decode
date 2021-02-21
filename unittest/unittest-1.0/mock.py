@@ -2453,7 +2453,22 @@ class _patch(object):
             setattr(klass, attr, patcher(attr_value))
         return klass
 
-
+    ###################################################################################################################
+    # decoration_helper(self, patched, args, keywargs)
+    # 该方法用于生成一组参数, 这组参数用于返回给使用了@patch装饰器的函数, 即:
+    # from unittest.mock import patch, MagicMock
+    #
+    # @patch('operator.mul')
+    # def main(mul):                           # decoration_helper 生成参数返回给 main 函数.
+    #     assert isinstance(mul, MagicMock)
+    #
+    # if __name__ == '__main__':
+    #     main()
+    #
+    # 关于 @contextlib.contextmanager 装饰器的作用, 加上这个装饰器之后让 decoration_helper 方法
+    # 支持了 with decoration_helper(...) as (args, kwargs) 写法,
+    # 支持 with 写法的好处是, contextmanager 帮忙try exception 兜底异常, 并且帮忙清理 with 作用域中产生变量.
+    ###################################################################################################################
     @contextlib.contextmanager
     def decoration_helper(self, patched, args, keywargs):
         extra_args = []
@@ -2463,14 +2478,25 @@ class _patch(object):
         exc_info = tuple()
         try:
             for patching in patched.patchings:
+                # patching 是一个 _patch 对象, _patch.__enter__() 将会
+                # 返回一个 MagicMock 的实例对象或 AsyncMock 的实例对象.
                 arg = patching.__enter__()
+
+                # 这里标记, patching 这个对象已经执行了 __enter__ 函数, mock对象已经生成完毕.
                 entered_patchers.append(patching)
+
+                # 如果 patching.attribute_name 的值存在, 那么就把这个值写入到 keywargs 中当作参数返回给上层函数.
                 if patching.attribute_name is not None:
                     keywargs.update(arg)
+
+                # 如果 patching.new 是默认值, 那么就将 mock 当作参数返回给上层函数.
                 elif patching.new is DEFAULT:
                     extra_args.append(arg)
 
             args += tuple(extra_args)
+
+            # 这里使用 yield 的原因是, 为了配合 contextmanager 的运行机制.
+            # contextmanager.__enter__() 触发前半部分的yield代码,
             yield (args, keywargs)
         except:
             if (patching not in entered_patchers and
@@ -2483,27 +2509,41 @@ class _patch(object):
             # re-raise the exception
             raise
         finally:
+            # contextmanager.__exit__() 触发后半部分的yield代码.
             for patching in reversed(entered_patchers):
                 patching.__exit__(*exc_info)
 
-
+    ###################################################################################################################
+    # decorate_callable(self, func)
+    # 这是一个装饰器函数, 封装了具体创建对象的函数的逻辑.
+    ###################################################################################################################
     def decorate_callable(self, func):
         # NB. Keep the method in sync with decorate_async_callable()
+        # 当 func 拥有 patchings 属性时, 表示这个函数已经
+        # 是一个替换过的对象了, 所以直接返回这个func即可.
         if hasattr(func, 'patchings'):
             func.patchings.append(self)
             return func
 
+        # 这里使用wraps主要是为了保留func对象的信息(保存在patched.__wrapped__中),
+        # 通过__wrapped__属性可以看到原始func的哪个函数.
         @wraps(func)
         def patched(*args, **keywargs):
+            # 前面从patch到_patch.__call__到这里, 一直是框架性流转代码,
+            # 进入self.decoration_helper才是具体创建对象的逻辑(是MagicMock还是AsyncMock还是new).
             with self.decoration_helper(patched,
                                         args,
                                         keywargs) as (newargs, newkeywargs):
                 return func(*newargs, **newkeywargs)
 
+        # 为装饰器 patched 函数添加 patchings 属性, 用于表示当前这个函数已经patch过了.
         patched.patchings = [self]
         return patched
 
-
+    ###################################################################################################################
+    # decorate_async_callable(self, func)
+    # 这是一个装饰器函数, 代码与 decorate_callable 一致, 区别是装饰器函数上上 async 和 await 关键字.
+    ###################################################################################################################
     def decorate_async_callable(self, func):
         # NB. Keep the method in sync with decorate_callable()
         if hasattr(func, 'patchings'):
