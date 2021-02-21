@@ -2855,6 +2855,12 @@ def _get_target(target):
     return getter, attribute
 
 
+#######################################################################################################################
+# _patch_object(target, attribute, new=DEFAULT, spec=None,
+#               create=False, spec_set=None, autospec=None,
+#               new_callable=None, **kwargs)
+# 该函数用于patch一个对象, 在这个函数中省略了 get_import 环节的代码
+#######################################################################################################################
 def _patch_object(
         target, attribute, new=DEFAULT, spec=None,
         create=False, spec_set=None, autospec=None,
