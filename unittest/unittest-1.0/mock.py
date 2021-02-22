@@ -3042,6 +3042,10 @@ def patch(
     )
 
 
+###################################################################################################################
+# class _patch_dict(object)
+# 该类用于替换字典
+###################################################################################################################
 class _patch_dict(object):
     """
     Patch a dictionary, or dictionary like object, and restore the dictionary
@@ -3071,6 +3075,15 @@ class _patch_dict(object):
     `patch.TEST_PREFIX` for choosing which methods to wrap.
     """
 
+    ###################################################################################################################
+    # __init__(self, in_dict, values=(), clear=False, **kwargs)
+    # 该方法是 _patch_dict 的初始化方方法
+    # in_dict: 要被替换字典.
+    # values: 预定义字典(patcher), 将in_dict原始字典保存到 self._original 中, 然后再将 values 写入到 self.in_dict 字典.
+    # clear: 为True时, 清空self.in_dict后再将values写入self.in_dict;
+    #        为False时, 不清空self.in_dict, 将self.values追加写入到 self.in_dict 字典.
+    # kwargs: 写入到self.in_dict中.
+    ###################################################################################################################
     def __init__(self, in_dict, values=(), clear=False, **kwargs):
         self.in_dict = in_dict
         # support any argument supported by dict(...) constructor
@@ -3079,7 +3092,10 @@ class _patch_dict(object):
         self.clear = clear
         self._original = None
 
-
+    ###################################################################################################################
+    # __call__(self, f)
+    # 该方法是object的内置方法(魔法方法), 在这里用于当作装饰器的入口; 参数 f 期望的类型是一个函数.
+    ###################################################################################################################
     def __call__(self, f):
         if isinstance(f, type):
             return self.decorate_class(f)
@@ -3104,20 +3120,33 @@ class _patch_dict(object):
                 setattr(klass, attr, decorated)
         return klass
 
-
+    ###################################################################################################################
+    # __enter__(self)
+    # 该方法是object的内置方法(魔法方法), 在这里用于当作 with _patch_dict(...) as x: 关键字语法的入口.
+    ###################################################################################################################
     def __enter__(self):
         """Patch the dict."""
         self._patch_dict()
         return self.in_dict
 
-
+    ###################################################################################################################
+    # _patch_dict(self)
+    # 该方法是装饰器的入口, 用于替换dict对象.
+    # 将原始的 字典数据 保存再 self._original 中, 然后将 self.values 的数据更新到 self.in_dict.
+    # 再 with 关键字语句 / 装饰器 作用域中 操作的都是 self.in_dict 对象.
+    ###################################################################################################################
     def _patch_dict(self):
+        # self.values 是一个字典.
         values = self.values
+
+        # 如果 self.in_dict 是字符串, 那么尝试去加载这个字典.
         if isinstance(self.in_dict, str):
             self.in_dict = _importer(self.in_dict)
+
         in_dict = self.in_dict
         clear = self.clear
 
+        # 将原始值保存到 self._original 中.
         try:
             original = in_dict.copy()
         except AttributeError:
@@ -3128,9 +3157,12 @@ class _patch_dict(object):
                 original[key] = in_dict[key]
         self._original = original
 
+        # 如果 self.clear 为 True, 那么就清空 self.in_dict ; 这意味着在 patch 的作用域内 字典 被替换成空字典.
+        # 如果 self.clear 为 False, 那么就保留 self.in_dict 字典; 这意味着在 patch 的作用域内 字典 与外部是一样的.
         if clear:
             _clear_dict(in_dict)
 
+        # self.values 是实例化 _patch_dict 时提供的预定义值, 即: 再 self.in_dict 的基础上, 加上 values 的值.
         try:
             in_dict.update(values)
         except AttributeError:
@@ -3138,25 +3170,38 @@ class _patch_dict(object):
             for key in values:
                 in_dict[key] = values[key]
 
-
+    ###################################################################################################################
+    # _unpatch_dict(self)
+    # 该方法用于恢复替换对象.
+    # 1. 清空 self.in_dict 字典
+    # 2. 将 self._original 字典 写回到 self.in_dict 中.
+    ###################################################################################################################
     def _unpatch_dict(self):
         in_dict = self.in_dict
         original = self._original
 
+        # 清空 self.in_dict 字典
         _clear_dict(in_dict)
 
+        # 将 self._original 字典 写回到 self.in_dict 中.
         try:
             in_dict.update(original)
         except AttributeError:
             for key in original:
                 in_dict[key] = original[key]
 
-
+    ###################################################################################################################
+    # __exit__(self, *args)
+    # 该方法是 with 关键字退出作用域时执行代码的hook钩子.
+    ###################################################################################################################
     def __exit__(self, *args):
         """Unpatch the dict."""
         self._unpatch_dict()
         return False
 
+    ###################################################################################################################
+    # 这两个属性用于支持手写代码(面向过程型编码风格), 即: 不是装饰器语法风格, 也不是 with 语法风格.
+    ###################################################################################################################
     start = __enter__
     stop = __exit__
 
