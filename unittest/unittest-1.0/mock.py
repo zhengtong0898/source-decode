@@ -2850,7 +2850,8 @@ def _get_target(target):
         raise TypeError("Need a valid target to patch. You supplied: %r" %
                         (target,))
 
-    # TODO: 为什么这里要写一个lambda, 而不是即时导入得到结果?
+    # 这是因为定义_patch时, 需要考虑结果除了时module对象之外,
+    # 还有可能是类的实例对象, 甚至可能是字符串, 所以可能是为了类型统一, 将其定义为 lambda 匿名函数.
     getter = lambda: _importer(target)
     return getter, attribute
 
