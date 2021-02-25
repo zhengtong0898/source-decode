@@ -260,6 +260,47 @@
 # 3. Future
 #    Future 是一个状态/数据暂存对象, 并包含add_done_callback功能.
 #    Future 对象将传统的异步(例如: bs架构+ajax通知回调模式)抽象成一个可编程并且稍微增加耦合度的对象.
+#
+#
+# 在 Python2 中, 并没有官方承认的 coroutine 对象; 前面说的 coroutine 和 coroutine pipeline ,
+# 打印出来它们依旧是 generator, 区别在于状态: just-started 和 非just-started(即: coroutine).
+#
+# 在 Python3 中, 虽然asyncio提供了coroutine装饰器进行补充, 但打印出来依旧是generator,
+# asyncio的解决方案是给generator对象增加一个_is_coroutine属性用于标记它是一个coroutine对象;
+# asyncio.iscoroutine 和 asyncio.iscoroutinefunction 都会检查,
+# 如果一个函数具有_is_coroutine属性, 那么就是一个coroutine对象; 举例:
+# async版本
+# import asyncio
+#
+# async def nested():
+#     return 42
+#
+# async def main():
+#     ss = nested()
+#     task = asyncio.create_task(ss)
+#
+#     zz = await task
+#     print("zz: ", zz)                             # zz: 42
+#
+# asyncio.run(main())
+#
+# generator版本
+# import asyncio
+#
+# @asyncio.coroutine
+# def hello():
+#     yield from asyncio.sleep(1)
+#     return 42
+#
+# async def main():
+#     ss = hello()
+#     task = asyncio.create_task(ss)
+#
+#     zz = await task
+#     print("zz: ", zz)                              # zz: 42
+#
+# asyncio.run(main())
+#
 #######################################################################################################################
 __all__ = (
     'Mock',
