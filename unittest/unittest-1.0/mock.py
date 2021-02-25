@@ -3467,14 +3467,23 @@ def _set_return_value(mock, method, name):
         method.side_effect = side_effector(mock)
 
 
-
+#######################################################################################################################
+# MagicMock 和 Mock 的区别在于:
+# MagicMock多继承了MagicMixin对象, 该对象的主要目的是将类 mock 对象的 魔法属性 全部替换成 MagicProxy 对象.
+# 即:
+# mock对象主要是为了记录那些不存在属性的调用.
+# magicmock对象主要是为了记录那些魔法属性的调用.
+#######################################################################################################################
 class MagicMixin(Base):
     def __init__(self, /, *args, **kw):
         self._mock_set_magics()  # make magic work for kwargs in init
         _safe_super(MagicMixin, self).__init__(*args, **kw)
         self._mock_set_magics()  # fix magic broken by upper level init
 
-
+    ###################################################################################################################
+    # _mock_set_magics(self)
+    # 该方法用于替换魔法属性, 将其换成MagicProxy.
+    ###################################################################################################################
     def _mock_set_magics(self):
         # set 数据结构的快捷操作
         # |操作符: union
@@ -3484,9 +3493,8 @@ class MagicMixin(Base):
         orig_magics = _magics | _async_method_magics
         these_magics = orig_magics
 
-        # self._mock_methods 是 spec 或 spec_set 对象的 dir() 属性集合,
         # 如果 self._mock_methods is not None 则表示 spec 或 spec_set 限定对象已经定义了.
-        # 那么接下来要做的就是提取 orig_magic 和 self._mock_methods 交集的属性, 其余的移除掉.
+        # orig_magics.intersection 的意思是 以 self._mock_metdhos 为主, 其他属性移除掉.
         if getattr(self, "_mock_methods", None) is not None:
             these_magics = orig_magics.intersection(self._mock_methods)
 
@@ -3498,16 +3506,21 @@ class MagicMixin(Base):
                     # remove unneeded magic methods
                     delattr(self, entry)
 
-        # 这里采用difference来移除 mock 类对象的__dict__属性.
+        # 这里采用difference来移除 当前(mock)类对象的__dict__属性, 即: 以 self._mock_methods 为主.
+        # 假设如果spec或spec_set没有定义, 那么 self._mock_methods 为空;
+        # 那么这里就以 _magics + _async_method_magics 为主, 这里使用 -(difference) 的意思是,
+        # 把相同的移除掉, 留下以 these_magics 为主的那些不同的.
+        # 当 type(self).__dict__ 很少属性时, 那么下面要替换的魔法属性就很多.
+        # 当 type(self).__dict__ 很多属性时, 那么下面要替换的魔法属性就很少甚至不替换.
         # don't overwrite existing attributes if called a second time
         these_magics = these_magics - set(type(self).__dict__)
 
         # TODO: 这里把Mock类对象剩余的属性替换为MagicProxy对象, 有什么用?
-        # MagicMock继承的是当前类, Magic的意思应该就是双下划线函数的替换, 具体使用场景需要多看一些test是怎么用的.
+        # ANSERED: 替换成 MagicProxy 对象的作用是, 当调用了魔法属性时, 像mock那样,
+        #          给它返回一个mock对象, 并且记录下来他调用了魔法属性.
         _type = type(self)
         for entry in these_magics:
             setattr(_type, entry, MagicProxy(entry, self))
-
 
 
 class NonCallableMagicMock(MagicMixin, NonCallableMock):
