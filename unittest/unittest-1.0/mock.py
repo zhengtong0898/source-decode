@@ -3271,6 +3271,16 @@ def _get_method(name, func):
     return method
 
 
+# 这些都是magics(魔法)属性
+# {'__rlshift__', '__imod__', '__mod__', '__idiv__', '__sizeof__', '__pos__', '__rdiv__', '__ge__', '__rtruediv__',
+# '__mul__', '__ilshift__', '__gt__', '__rmod__', '__radd__', '__isub__', '__lshift__', '__div__', '__round__',
+# '__ior__', '__iand__', '__trunc__', '__neg__', '__index__', '__iadd__', '__itruediv__', '__rmatmul__', '__divmod__',
+# '__rmul__', '__and__', '__hash__', '__pow__', '__rrshift__', '__exit__', '__float__', '__fspath__', '__rpow__',
+# '__ixor__', '__rfloordiv__', '__contains__', '__rsub__', '__invert__', '__complex__', '__bool__', '__irshift__',
+# '__floor__', '__aiter__', '__getitem__', '__abs__', '__int__', '__lt__', '__truediv__', '__rshift__', '__rand__',
+# '__next__', '__ceil__', '__imul__', '__ror__', '__iter__', '__eq__', '__ne__', '__or__', '__add__', '__rdivmod__',
+# '__floordiv__', '__rxor__', '__ifloordiv__', '__str__', '__len__', '__xor__', '__delitem__', '__matmul__', '__le__',
+# '__imatmul__', '__ipow__', '__enter__', '__setitem__', '__sub__'}
 _magics = {
     '__%s__' % method for method in
     ' '.join([magic_methods, numerics, inplace, right]).split()
