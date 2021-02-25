@@ -3562,7 +3562,13 @@ class MagicMock(MagicMixin, Mock):
         self._mock_set_magics()
 
 
-
+#######################################################################################################################
+# class MagicProxy(Base)
+# 通过Magicmixin最终得知mock对象为什么会有parent这个变量, 因为这里需要.
+#
+# 当通过MagicMock调用了魔法属性时, 会触发MagicProxy.__get__并为其生成一个mock对象,
+# 这个mock对象就会有name=__xxx__, _new_name=__xxx__, _new_parent=MagicMock 这些信息.
+#######################################################################################################################
 class MagicProxy(Base):
     def __init__(self, name, parent):
         self.name = name
