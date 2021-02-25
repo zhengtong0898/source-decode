@@ -3357,8 +3357,16 @@ _magics = {
 }
 
 # Magic methods used for async `with` statements
+# __aenter__ 和 __aexit__ 是配合 with 关键字语法完成特定机制的功能, 主要用于简化变量创建和变量回收工作.
+# __anext__ 通常和 __aiter__ 一起配合完成工作(使对象编程一个 async_iterator).
+# 备注: async_iterator 比 generator 块2.5倍.
+# 参考资料:
+# https://cloud.tencent.com/developer/article/1420997
+# https://www.python.org/dev/peps/pep-0525/
 _async_method_magics = {"__aenter__", "__aexit__", "__anext__"}
+
 # Magic methods that are only used with async calls but are synchronous functions themselves
+# __aiter__ 它是一个同步函数, 但也只有异步函数调用会触发它.
 _sync_async_magics = {"__aiter__"}
 _async_magics = _async_method_magics | _sync_async_magics
 
