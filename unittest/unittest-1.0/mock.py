@@ -232,6 +232,35 @@
 #######################################################################################################################
 
 
+#######################################################################################################################
+# asyncio Awaitable Object
+#
+# Awaitables: There are three main types of awaitable objects: coroutines, Tasks, and Futures.
+# 划重点: 声明了 async 关键字的函数都会具备 __await__ 属性, 表明它是一个 awaitable 对象.
+#
+# 1. Coroutine
+#    声明了 async 关键字的函数, 或者是迭代循环; 都被称为 Coroutine;
+#    例如, 下面这个就是一个最简单版本的coroutine函数.
+#
+#    async def hello():
+#        return 42
+#
+#    print(hello)                                   <function hello at 0x00000245679F1820>
+#    s = hello()
+#    print(s)                                       <coroutine object hello at 0x000002456799EE40>
+#    print(dir(s))                                  具备了 __await__ 属性的对象, 都是 awaitable 对象.
+#
+#    备注: 这个hello函数里面不可以使用 await 42; 因为 42 是一个常量对象, 不是awaitable对象;
+#          然而并不是 hello 函数内不可以使用 await , 而是 await 之后等待那些 awaitable 对象;
+#
+# 2. Task
+#    Task 是由 asyncio 框架提供的一个类对象, 它继承了Future并再基于此的基础上
+#    提供了一套符合 asyncio 运行机制的功能, 使其能够满足异步运行机制.
+#
+# 3. Future
+#    Future 是一个状态/数据暂存对象, 并包含add_done_callback功能.
+#    Future 对象将传统的异步(例如: bs架构+ajax通知回调模式)抽象成一个可编程并且稍微增加耦合度的对象.
+#######################################################################################################################
 __all__ = (
     'Mock',
     'MagicMock',
