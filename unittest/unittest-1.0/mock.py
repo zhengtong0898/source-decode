@@ -3587,7 +3587,12 @@ class MagicProxy(Base):
         return self.create_mock()
 
 
+#######################################################################################################################
+# class AsyncMockMixin(Base)
+# 该函数对标的是 NonCallableMock 对象.
+#######################################################################################################################
 class AsyncMockMixin(Base):
+    # _mock_delegate
     await_count = _delegating_property('await_count')
     await_args = _delegating_property('await_args')
     await_args_list = _delegating_property('await_args_list')
@@ -3608,11 +3613,22 @@ class AsyncMockMixin(Base):
         code_mock.co_flags = inspect.CO_COROUTINE
         self.__dict__['__code__'] = code_mock
 
+    ###################################################################################################################
+    # async def _execute_mock_call(self, /, *args, **kwargs)
+    # 该函数对标 NonCallableMock._execute_mock_call.
+    ###################################################################################################################
     async def _execute_mock_call(self, /, *args, **kwargs):
         # This is nearly just like super(), except for sepcial handling
         # of coroutines
 
+        # 能触发这个函数意味着已经完成了实例化的功能, self.call_args 是 Mock 对象实例化时初始化的一个内部属性.
+        # 由于 AsyncMock 继承了 Mock, 所以 AsyncMock 也拥有这个属性.
+        # 这个属性的意思是: 调用 mock 时提供的参数, 会被记录到 self.call_args 中.
         _call = self.call_args
+
+        # 访问 self.await_count 实际上是触发 上面的_delegating_property('await_count'),
+        # 其内部会尝试访问 self._mock_delegate 对象, 如果该对象存在, 那么就从该对象中读取await_count.
+        # 如果该self._mock_delegate对象不存在, 那么就返回 self._mock_await_count 对象.
         self.await_count += 1
         self.await_args = _call
         self.await_args_list.append(_call)
@@ -3621,6 +3637,7 @@ class AsyncMockMixin(Base):
         if effect is not None:
             if _is_exception(effect):
                 raise effect
+            # 如果 effect 不是一个函数, 那么就视为generator
             elif not _callable(effect):
                 try:
                     result = next(effect)
@@ -3630,6 +3647,7 @@ class AsyncMockMixin(Base):
                     raise StopAsyncIteration
                 if _is_exception(result):
                     raise result
+            # 如果 effect 是一个 coroutine 函数, 那么就用 await 来执行.
             elif asyncio.iscoroutinefunction(effect):
                 result = await effect(*args, **kwargs)
             else:
