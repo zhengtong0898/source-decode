@@ -3788,6 +3788,26 @@ class AsyncMockMixin(Base):
         self.await_args_list = _CallList()
 
 
+#######################################################################################################################
+# class AsyncMock(AsyncMockMixin, AsyncMagicMixin, Mock)
+# AsyncMock 首先是一个 Mock 对象, 因为它继承了 Mock 对象.
+# 其次是它继承了 AsyncMagicMixin(含MagicMixin), 而 MagicMock 也继承了MagicMixin, 因此它也是一个 MagicMock 对象.
+# 再就是它继承了 AsyncMockMixin, 重构了 _execute_mock_call 方法.
+#
+# 补充: AsyncMock最显著的就是交给Mock的.__call__来管理和触发 ._execute_mock_call 函数,
+#      即: Mock 和 MagicMock 走 Mock._execute_mock_call 函数,
+#          AsyncMock 走 AsyncMock._execute_mock_call 函数.
+#
+#          # self._execute_mock_call(*args, **kwargs) 这行代码,
+#          # 当 self 是一个 Mock 或 MagicMock 时, 返回一个运行结果;
+#          # 当 self 时一个 AsyncMock 时, 返回的时一个 Coroutine 对象,
+#          # 由于Coroutine 时一个Awaitable 对象, 外部使用 await 就可以触发进入 AsyncMockMixin._execute_mock_call 方法.
+#          class NonCallableMock(Base):
+#              def _mock_call(self, /, *args, **kwargs):
+#                  return self._execute_mock_call(*args, **kwargs)
+#
+#      AsyncMock除了Mock那些不存在的对象之外, 还可以MagicMock那些双下划线的魔法方法.
+#######################################################################################################################
 class AsyncMock(AsyncMockMixin, AsyncMagicMixin, Mock):
     """
     Enhance :class:`Mock` with features allowing to mock
