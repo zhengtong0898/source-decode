@@ -3851,6 +3851,26 @@ class AsyncMock(AsyncMockMixin, AsyncMagicMixin, Mock):
     """
 
 
+#######################################################################################################################
+# class _ANY(object)
+# 该类用于充当参数值, 即: 你不知道为参数提供什么值时, 可以采用ANY.
+#
+# _ANY 支持 == 和 != 操作:
+# 当做 == 操作时, 总是返回 True
+# 当做 != 操作时, 总是返回 False
+#
+# 一般情况下, _ANY 这个类本身是没有任何意义的;
+# 但是当用于做参数比较时 _ANY 的作用是测试内部函数的逻辑正确性, 例如:
+# mock = Mock()
+# mock(datetime.now(), foo=datetime.now())
+#
+# mock.assert_called_with(ANY, foo=ANY)
+#
+# 该例子最终比较的是两组参数的是否一致,
+# 参数的比较会触发_Call类的__eq__,
+# 而 __eq__ 中第一行就是 if other is ANY: return True,
+# 这意味着 ANY 是一个helper, 帮助快速验证内部函数的逻辑正确性.
+#######################################################################################################################
 class _ANY(object):
     "A helper object that compares equal to everything."
 
