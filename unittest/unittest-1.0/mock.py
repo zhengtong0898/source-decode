@@ -4044,30 +4044,57 @@ class _Call(tuple):
         self._mock_parent = parent
         self._mock_from_kall = from_kall
 
-
+    ###################################################################################################################
+    # __eq__(self, other)
+    # 该方法用于 == 比较操作, 主要是比较两个对象(参数)是否相等.
+    ###################################################################################################################
     def __eq__(self, other):
+        # 当 other 是 ANY 时, 就返回 True, 表示两个对象相同, 简化对象的比较操作.
         if other is ANY:
             return True
+
+        # 如果 other 是一个列表或元组或字典, 那么 len(other) 就不会报错.
+        # 但是这里期望的是一个列表或者元组, 而不是一个字典; 否则就返回False表示两个对象不相等.
         try:
             len_other = len(other)
         except TypeError:
             return False
 
+        # 题外话: 如果这里是字典的话, 且当len(self) != 2时, 有可能会报错...
+        # 回归主线: 这里主要是按Call约定的数据格式来提取参数,
+        #          即: 当 len(self) == 2 时, self[0] 分配给 self_args, self[1]分配给 self_kwargs;
+        #              当 len(self) != 2 时, 假设他有三个值, self[0]分配给 self_name,
+        #              self[1]分配给 self_args, self[2] 分配给 self_kwargs.
         self_name = ''
         if len(self) == 2:
             self_args, self_kwargs = self
         else:
             self_name, self_args, self_kwargs = self
 
+        # 当 self._mock_parent 和 other._mock_parent 是一个具体对象时,
+        # 且当 self._mock_parent 和 other._mock_parent 不同时, 就返回False表示这两个对象不相同.
         if (getattr(self, '_mock_parent', None) and getattr(other, '_mock_parent', None)
                 and self._mock_parent != other._mock_parent):
             return False
 
+        # 这一段代码的主要目的是从 other 中提取 other_args, other_kwargs 用于跟 self的args/kwargs 进行比较是否相等.
         other_name = ''
+        # 当 len_other == 0 时, 表示没有提供参数, 并将 other_args 置为 (), 将 other_kwargs 置为 {};
         if len_other == 0:
             other_args, other_kwargs = (), {}
+        # 当 len_other == 3 时, 将 other 按约定格式提取成三份: other_name, other_args, other_kwargs
         elif len_other == 3:
             other_name, other_args, other_kwargs = other
+        # 当 len_other == 1 时, 约定格式可能如下:
+        # (("hello"),)          # (args, )
+        # ("hello", )           # (name, )
+        # ({"h": "hello"},)     # (kwargs, )
+        # value, = other
+        # 得出两种可能的组合:
+        # ("hello")             # 这种格式满足: if isinstance(value, tuple)
+        # "hello"               # 这种格式满足: if isinstance(value, str)
+        # {"h", "hello"}        # 这种格式满足: else
+        # 其他情况将会是为定义行为, 会出现不可预期的错误和报错.
         elif len_other == 1:
             value, = other
             if isinstance(value, tuple):
@@ -4079,24 +4106,31 @@ class _Call(tuple):
             else:
                 other_args = ()
                 other_kwargs = value
+        # 当 len_other == 2 时, 约定格式可能如下:
+        # (name, args)          # 这种格式满足: if isinstance(first, str) 和 if isinstance(second, tuple)
+        # (name, kwargs)        # 这种格式满足: if isinstance(first, str) 和 else
+        # (args, kwargs)        # 这种格式满足: else
         elif len_other == 2:
             # could be (name, args) or (name, kwargs) or (args, kwargs)
             first, second = other
             if isinstance(first, str):
                 other_name = first
-                if isinstance(second, tuple):
+                if isinstance(second, tuple):                       # (name, args)
                     other_args, other_kwargs = second, {}
-                else:
+                else:                                               # (name, kwargs)
                     other_args, other_kwargs = (), second
-            else:
+            else:                                                   # (args, kwargs)
                 other_args, other_kwargs = first, second
         else:
             return False
 
+        # 当 self_name 是一个具体值时, 就需要去比较它们是否相同,
+        # 如果不相同, 那么就没有继续比较下去的必要.
         if self_name and other_name != self_name:
             return False
 
         # this order is important for ANY to work!
+        # name 比较完毕之后, 这里就不需要再继续比较, 只需要比较 args 和 kwargs 是否相等即可.
         return (other_args, other_kwargs) == (self_args, self_kwargs)
 
 
