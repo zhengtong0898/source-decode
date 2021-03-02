@@ -4159,73 +4159,165 @@ class _Call(tuple):
         # 所以即便两个参数一致, 但是由于parent不一致, 所以两个对象也不一致.
         return _Call((self._mock_name, args, kwargs), name=name, parent=self)
 
-
+    ###################################################################################################################
+    # def __getattr__(self, attr)
+    # 该方法用于当获取不存在的属性时, 返回一个新的_Call对象.
+    #
+    # 这里 __call__ 主要的作用是, 通过调用 call(参数) 生成一个新的对象, 用于与目标mock对象的参数的一致性进行比较.
+    #
+    # TODO: from_kall 是做什么用的?
+    ###################################################################################################################
     def __getattr__(self, attr):
+        # attr 是属性名;
+        # 当 self._mock_name is None 时, 表示当前_Call对象实例化时并没有提供name参数.
+        # 所以返回新的_Call对象时, 先将 attr 当作name参数来实例化.
         if self._mock_name is None:
             return _Call(name=attr, from_kall=False)
+
+        # 如果 self._mock_name 是一个具体值时, 那么就把 name.attr 当作新的_Call 对象的 name 参数.
         name = '%s.%s' % (self._mock_name, attr)
         return _Call(name=name, parent=self, from_kall=False)
 
-
+    ###################################################################################################################
+    # def __getattribute__(self, attr)
+    # 该方法用于: 当访问的属性在tuple.__dict__范围中时, 抛出异常. 否则触发进入 __getattr__ 方法.
+    ###################################################################################################################
     def __getattribute__(self, attr):
+        # tuple.__dict__ 范围:
+        # ['__repr__', '__hash__', '__getattribute__', '__lt__', '__le__', '__eq__', '__ne__', '__gt__', '__ge__',
+        # '__iter__', '__len__', '__getitem__', '__add__', '__mul__', '__rmul__', '__contains__', '__new__',
+        # '__getnewargs__', 'index', 'count', '__doc__']
+        #
+        # 如果 attr 这个属性 在 tuple.__dict__ 范围中, 那么就报错.
         if attr in tuple.__dict__:
             raise AttributeError
+
+        # 如果 attr 这个属性 不在 tuple.__dict 范围中, 那么就触发 __getattr__ 这个方法.
         return tuple.__getattribute__(self, attr)
 
-
+    ###################################################################################################################
+    # def count(self, /, *args, **kwargs)
+    # 该方法啥也没做, 直接触发 tuple.count方法.
+    ###################################################################################################################
     def count(self, /, *args, **kwargs):
         return self.__getattr__('count')(*args, **kwargs)
 
+    ###################################################################################################################
+    # def index(self, /, *args, **kwargs)
+    # 该方法啥也没做, 直接触发 tuple.index方法.
+    ###################################################################################################################
     def index(self, /, *args, **kwargs):
         return self.__getattr__('index')(*args, **kwargs)
 
+    ###################################################################################################################
+    # def _get_call_arguments(self)
+    # 该方法用于提取 _Call 实例对象的参数(不含 name).
+    # 这是一个很有用的helper方法.
+    ###################################################################################################################
     def _get_call_arguments(self):
+        # 当 len(self) == 2 时, 表示参数只有两个.
         if len(self) == 2:
             args, kwargs = self
+        # 否则会视为它的参数是三个.
         else:
             name, args, kwargs = self
 
+        # 总之, 只返回 args 和 kwargs; 忽略 name.
         return args, kwargs
 
+    ###################################################################################################################
+    # @property
+    # def args(self)
+    # 该方法用于返回 _Call 实例对象的 args 成员.
+    ###################################################################################################################
     @property
     def args(self):
         return self._get_call_arguments()[0]
 
+    ###################################################################################################################
+    # @property
+    # def kwargs(self)
+    # 该方法用于返回 _Call 实例对象的 kwargs 成员.
+    ###################################################################################################################
     @property
     def kwargs(self):
         return self._get_call_arguments()[1]
 
+    ###################################################################################################################
+    # def __repr__(self)
+    # 该方法用于配合print返回对象信息.
+    ###################################################################################################################
     def __repr__(self):
+        # 当 self._mock_from_kall == False 时,
+        # 假设这里 self._mock_name 为空, 那么 name = 'call'
+        # 那么这里返回的就是 call;
+        #
+        # 总体来说:
+        # 1. self._mock_from_kall 默认情况下是True.
+        # 2. 当 self._mock_from_kall 是 False 时, 返回 self._mock_name (基本上都是如此).
         if not self._mock_from_kall:
             name = self._mock_name or 'call'
+
+            # 这个条件感觉几乎不会触发.
             if name.startswith('()'):
                 name = 'call%s' % name
+
+            # 所以 self._mock_name 是什么就会返回什么.
             return name
 
+        # 当 len(self) == 2 时, 提取 args, kwargs;
         if len(self) == 2:
             name = 'call'
             args, kwargs = self
+
+        # 否则, 这里视为是三个, 提取: name, args, kwargs;
         else:
             name, args, kwargs = self
+
+            # 处理name规则:
+            # 当 name 为空时, name = 'call'
             if not name:
                 name = 'call'
+            # 当 name.startswith 不是 () 时, 表示它时一个子_Call对象, name = 'call.%s' % name;
             elif not name.startswith('()'):
                 name = 'call.%s' % name
+            # TODO: 当 name.startswith 是 () 时, 待补充.
             else:
                 name = 'call%s' % name
+
+        # 重新生成一个 call 签名, 以name为主, 例如:
+        # name = 'good'
+        # args = ('sss', 'bbb')
+        # kwargs = {'a': 'aa', 'b': 'bb'}
+        # 那么这里将会生成: good('sss', 'bbb', **{'a': 'aa', 'b': 'bb'})
         return _format_call_signature(name, args, kwargs)
 
-
+    ###################################################################################################################
+    # def call_list(self)
+    # 该对象用于生成一个_CallList对象, 用于做一段连续的匹配.
+    ###################################################################################################################
     def call_list(self):
         """For a call object that represents multiple calls, `call_list`
         returns a list of all the intermediate calls as well as the
         final call."""
+
+        # vals 是存储那些 _mock_from_kall 是 True 的对象的集合.
         vals = []
         thing = self
         while thing is not None:
+
+            # 当 thing._mock_from_kall == True 时, 将其纳入到 vals 中,
+            # 也就是说 vals 是存储那些 _mock_from_kall 是 True 的对象的集合.
             if thing._mock_from_kall:
                 vals.append(thing)
+
+            # 递归处理父_Call对象.
             thing = thing._mock_parent
+
+        # 由于是从子到父递归添加到 vals 中, 这里采用 reversed 对列表进行反转, 使其对象顺序是: 从父到子的顺序.
+        # _CallList对象本身是一个列表, 所以 _CallList(reversed(vals)) 就是将一个列表对象.
+        # 但是由于 _CallList 这个对象存在的意义和目的是为了能够进行一段连续的匹配,
+        # 所以这个函数的主要目的是为了将 vals 准备用来做一段连续的匹配.
         return _CallList(reversed(vals))
 
 
