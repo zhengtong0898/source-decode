@@ -452,6 +452,10 @@ def _extract_mock(obj):
 # 该函数用于提取 func 的签名信息(函数名 + 参数名 + 参数类型注解).
 # 返回值: 如果 func 参数不符合提取signature的条件, 那就返回None;
 #
+# 参数:
+# as_instance: bool;        当 as_instance 为 True 时, 表示它是一个已实例化的对象; 反之则表示它是一个未实例化的类对象.
+# eat_self: bool;           当 eat_self 为 True 时, 表示将它用partial包裹起来; 反之不使用partial包裹.
+#
 # 什么是符合signature的条件呢?
 # 1). func必须是一个函数(callable或者具有 .__call__ 属性表明它是一个callable对象).
 # 2). 如果 func 不是一个函数, 那必须是一个类对象(未实例化的), 并且参数 as_instance 必须未False,
@@ -4324,6 +4328,11 @@ class _Call(tuple):
 call = _Call(from_kall=False)
 
 
+#######################################################################################################################
+# def create_autospec(spec, spec_set=False, instance=False, _parent=None, _name=None, **kwargs)
+# 该函数用于创建一个mock对象.
+# 这个mock对象会围绕 return_value / spec(限定对象的属性) 来创建更多的子mock对象, 并将这些子mock对象记录到_mock_children中.
+#######################################################################################################################
 def create_autospec(spec, spec_set=False, instance=False, _parent=None,
                     _name=None, **kwargs):
     """Create a mock object using another object as a spec. Attributes on the
@@ -4343,49 +4352,107 @@ def create_autospec(spec, spec_set=False, instance=False, _parent=None,
 
     `create_autospec` also takes arbitrary keyword arguments that are passed to
     the constructor of the created mock."""
+
+    # 参数类型:
+    # spec: 函数/方法/类; TODO: 如果是类的话, 是实例化的还是未实例化的?
+    # spec_set: bool;       当 spec_set 为 True 时, 将 spec 作为 spec_set 参数传递给 mock 作为实例化参数.
+    # instance: bool;       当 instance 为 True 时, 表示 spec 是一个已实例化的对象, 反之表示 spec 是一个未实例化的类对象.
+
+    # spec 通常情况下是一个 function 或 class 或 method;
+    # 当 spec 是一个列表时, 会将 spec 视为一个列表对象(用于当作限定对象).
     if _is_list(spec):
         # can't pass a list instance to the mock constructor as it will be
         # interpreted as a list of strings
         spec = type(spec)
 
+    # 列表
+    # spec=[]
+    # spec=type(spec)           <class 'list'>                                  isinstance(spec, type) == True
+    #
+    # 函数
+    # def hello(): pass
+    # spec=type(hello)          <class 'function'>                              isinstance(spec, type) == False
+    # hello                     <function hello at 0x000002106E44C700>          isinstance(hello, type) == False
+    #
+    # 类
+    # class Hello: pass
+    # spec=type(Hello)          <class 'type'>                                  isinstance(spec, type) == True
+    # Hello                     <class '__main__.Hello'>                        isinstance(Hello, type) == True
+    # b = Hello()               <__main__.Hello object at 0x000002106E893FA0>   isinstance(b, type) == False
+    # c = type(b)               <class '__main__.Hello'>                        isinstance(c, type) == True
+    #
+    # 当 spec 是一个未实例化的类时(含内置类型: list, dict 等), 那么这个 spec 就是一个 type 对象.
     is_type = isinstance(spec, type)
+
+    # 如果 spec 是一个函数/方法, 并且声明了 async 关键字, 那么 is_async_func 就会是 True.
     is_async_func = _is_async_func(spec)
+
+    # 将 spec 作为参数, 准备传递给mock作为实例化参数.
     _kwargs = {'spec': spec}
-    if spec_set:
+    if spec_set:                                            # 当 spec_set 为 True 时, 以 spec_set 为主
         _kwargs = {'spec_set': spec}
-    elif spec is None:
+    elif spec is None:                                      # 当 spec 为 None 时(即便spec_set是True), 清空spec参数.
         # None we mock with a normal mock without a spec
         _kwargs = {}
+
+    # 当 spec 是一个具体对象, 并且是一个已实例化的对象时, 增加 _spec_as_instance=True参数.
     if _kwargs and instance:
         _kwargs['_spec_as_instance'] = True
 
+    # 将 kwargs 合并到 _kwargs 中.
     _kwargs.update(kwargs)
 
+    # 根据不同情况, 指定不同的Mock对象作为实例化的对象, 默认情况下是MagicMock.
     Klass = MagicMock
+    # 什么是data descriptor ?
+    # class Hello:
+    #     @property
+    #     def world(self):
+    #         return "hello world!"
+    # inspect.isdatadescriptor(Hello.world) == True
+    # 在这里, Hello.world 就是一个 data descriptor.
+    # 参考: https://stackoverflow.com/a/29460772
+    #
+    # 当 spec 是一个 data descriptor 时, 清空 _kwargs 参数.
     if inspect.isdatadescriptor(spec):
         # descriptors don't have a spec
         # because we don't know what type they return
         _kwargs = {}
+
+    # 当 spec 是一个异步函数/方法时, 将 AsyncMock 作为待实例化对象.
+    # 当 spec 时一个异步对象/方法时, instance不可以是 True, 因为这会导致mock实例化时signature会尝试partial从而报错.
     elif is_async_func:
         if instance:
             raise RuntimeError("Instance can not be True when create_autospec "
                                "is mocking an async function")
         Klass = AsyncMock
+
+    # 当 spec 是一个不可调用的对象时,  将 NonCallableMagicMock 作为待实例化对象.
+    # 暂时想不出来可能是什么类型的对象; TODO: 待补充.
     elif not _callable(spec):
         Klass = NonCallableMagicMock
+
+    # 当 spec 是 type 并且 instance 又说它是已实例化的对象,
+    # 并且又说它是不可调用的对象时, 将 NonCallableMagicMock 作为待实例化对象.
+    # 暂时想不出来可能是什么类型的对象; TODO: 待补充.
     elif is_type and instance and not _instance_callable(spec):
         Klass = NonCallableMagicMock
 
+    # 如果 _kwargs 中有 'name', 那么就以 _kwargs['name'] 为主, 否则以 _name 为主.
     _name = _kwargs.pop('name', _name)
 
+    # 当 _parent 是一个具体对象时, _new_name == _name;
+    # 当 _parent 为空时, _new_name为空;
     _new_name = _name
     if _parent is None:
         # for a top level object no _new_name should be set
         _new_name = ''
 
+    # 实例化 mock 对象.
     mock = Klass(parent=_parent, _new_parent=_parent, _new_name=_new_name,
                  name=_name, **_kwargs)
 
+    # TODO: 这里看不是很明白.
     if isinstance(spec, FunctionTypes):
         # should only happen at the top level because we don't
         # recurse for functions
@@ -4395,13 +4462,19 @@ def create_autospec(spec, spec_set=False, instance=False, _parent=None,
     else:
         _check_signature(spec, mock, is_type, instance)
 
+    # 如果 _parent 是一个具体对象, 并且 spec 是一个未实例化的类对象.
+    # 将刚刚实例化好的mock对象, 纳入到 _parent._mock_children 中.
     if _parent is not None and not instance:
         _parent._mock_children[_name] = mock
 
+    # is_type and not instance 表示: spec 是一个未实例化的类对象;
+    # 'return_value' not in kwargs 表示: kwargs 中不含 'return_value';
+    # 那么就为 mock.return_value 设定一个值, 这个值就是一个mock对象.
     if is_type and not instance and 'return_value' not in kwargs:
         mock.return_value = create_autospec(spec, spec_set, instance=True,
                                             _name='()', _parent=mock)
 
+    # 下面这段代码的意思是: 为限定对象的属性(不含魔法属性)挨个创建一个mock对象, 然后写入到 mock._mock_children 中.
     for entry in dir(spec):
         if _is_magic(entry):
             # MagicMock already does the useful magic methods for us
