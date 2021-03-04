@@ -4578,6 +4578,13 @@ class _SpecState(object):
         self.name = name
 
 
+#######################################################################################################################
+# create_autospec 是一个函数:                             type(create_autospec) == <class 'function'>
+# ANY 是一个 _ANY 类的已实例化对象, ANY.__eq__ 是一个方法: type(ANY.__eq__)      == <class 'method'>
+#
+# 也就是说使用 isinstance(xx, FunctionTypes) 的意思是:
+# 如果 xx 是一个函数 或者 是一个方法, 那么就返回True; 否则就返回False;
+#######################################################################################################################
 FunctionTypes = (
     # python function
     type(create_autospec),
