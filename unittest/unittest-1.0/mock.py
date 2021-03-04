@@ -4498,6 +4498,11 @@ def create_autospec(spec, spec_set=False, instance=False, _parent=None,
         if spec_set:
             kwargs = {'spec_set': original}
 
+        # 当 original 是一个函数或方法时, 并不是创建一个mock对象, 而是创建 SpecState 对象,
+        # 将 original(函数名或方法名), spec_set(bool), mock(parent), entry(name), instance(ids)
+        # 这几个参数暂存到 _SpecState 对象中.
+        # 当后续触发mock.__getattr__时会从mock._mock_children[entry]中找到这个对象,
+        # 那时才会使用这些暂存参数来实例化mock对象.
         if not isinstance(original, FunctionTypes):
             new = _SpecState(original, spec_set, mock, entry, instance)
             mock._mock_children[entry] = new
@@ -4556,6 +4561,11 @@ def _must_skip(spec, entry, is_type):
     return is_type
 
 
+#######################################################################################################################
+# class _SpecState(object)
+# 该类是一个mock初始化的参数的暂存对象, 即: 先不实例化mock对象, 而是先将mock对象需要用到的参数暂时存储在 _SpecState 对象中,
+# 当后面触发到特定场景需要创建特定mock对象时, 才会从 _SpecState 对象中提取参数给mock来完成实例化动作.
+#######################################################################################################################
 class _SpecState(object):
 
     def __init__(self, spec, spec_set=False, parent=None,
