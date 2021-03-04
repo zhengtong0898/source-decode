@@ -4498,7 +4498,7 @@ def create_autospec(spec, spec_set=False, instance=False, _parent=None,
         if spec_set:
             kwargs = {'spec_set': original}
 
-        # 当 original 是一个函数或方法时, 并不是创建一个mock对象, 而是创建 SpecState 对象,
+        # 当 original 不是一个函数或方法时, 并不是创建一个mock对象, 而是创建 SpecState 对象,
         # 将 original(函数名或方法名), spec_set(bool), mock(parent), entry(name), instance(ids)
         # 这几个参数暂存到 _SpecState 对象中.
         # 当后续触发mock.__getattr__时会从mock._mock_children[entry]中找到这个对象,
@@ -4506,6 +4506,8 @@ def create_autospec(spec, spec_set=False, instance=False, _parent=None,
         if not isinstance(original, FunctionTypes):
             new = _SpecState(original, spec_set, mock, entry, instance)
             mock._mock_children[entry] = new
+
+        # 当 original 是一个函数或方法时
         else:
             parent = mock
             if isinstance(spec, FunctionTypes):
@@ -4533,23 +4535,39 @@ def create_autospec(spec, spec_set=False, instance=False, _parent=None,
     return mock
 
 
+#######################################################################################################################
+# def _must_skip(spec, entry, is_type)
+# 该函数用于检查 spec 对象, 当 spec 是一个类对象时, 返回True.
+# 这个作用是实例化mock时, 告诉mock要采用partial来验证spec.__init__的签名.
+#######################################################################################################################
 def _must_skip(spec, entry, is_type):
     """
     Return whether we should skip the first argument on spec's `entry`
     attribute.
     """
+    # 当 spec 不是一个 type 时, 表示它是一个已实例化的对象.
     if not isinstance(spec, type):
+        # 已实例化的对象.__dict__ 返回的是成员变量, 而不是成员方法.
+        # 也就是说: 当 entry 是 spec 的一个成员变量, 返回 False
         if entry in getattr(spec, '__dict__', {}):
             # instance attribute - shouldn't skip
             return False
+
+        # spec 还是要回归到类对象, 而不是实例对象.
         spec = spec.__class__
 
+    # __mro__ 是继承顺序的集合.
+    # 一次从继承顺序中取查找 entry 这个方法.
     for klass in spec.__mro__:
         result = klass.__dict__.get(entry, DEFAULT)
         if result is DEFAULT:
             continue
+
+        # 如果 result 是一个静态方法或者类方法, 返回 False
         if isinstance(result, (staticmethod, classmethod)):
             return False
+
+        # 如果 result 是一个常规方法, 那么就返回 is_type(通常是 True).
         elif isinstance(getattr(result, '__get__', None), MethodWrapperTypes):
             # Normal method => skip if looked up on type
             # (if looked up on instance, self is already skipped)
@@ -4558,6 +4576,7 @@ def _must_skip(spec, entry, is_type):
             return False
 
     # function is a dynamically provided attribute
+    # 如果spec是一个类对象， 如果spec没有继承任何对象, 那么就返回 is_type(通常是True).
     return is_type
 
 
