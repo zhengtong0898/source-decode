@@ -4752,12 +4752,32 @@ def seal(mock):
             seal(m)
 
 
+#######################################################################################################################
+# class _AsyncIterator
+# 将 iterator 封装成 async iterator 对象.
+#######################################################################################################################
 class _AsyncIterator:
     """
     Wraps an iterator in an asynchronous iterator.
     """
     def __init__(self, iterator):
+        # 这里将iterator对象暂存在self.iterator中, 后续做next/for(迭代)操作时, 操作 self.iterator 对象.
         self.iterator = iterator
+
+        # 这里使用 NonCallableMock 来mock掉 __code__ 魔法属性,
+        # 其中 CodeType = type(_f.__code__); CodeType == <class 'code'>
+        # dir(CodeType)
+        # ['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__',
+        # '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__ne__', '__new__', '__reduce__',
+        # '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'co_argcount',
+        # 'co_cellvars', 'co_code', 'co_consts', 'co_filename', 'co_firstlineno', 'co_flags', 'co_freevars',
+        # 'co_kwonlyargcount', 'co_lnotab', 'co_name', 'co_names', 'co_nlocals', 'co_posonlyargcount',
+        # 'co_stacksize', 'co_varnames', 'replace']
+        #
+        # code_mock.co_flags 是允许的限定范围, 所以在这个范围内设定这个值是ok的.
+        # 即: __code__.co_flags == inspect.CO_ITERABLE_COROUTINE
+        #
+        # 这里声明: CO_ITERABLE_COROUTINE 是为了能够让 asyncio.iscoroutinefunction 识别出这是一个异步对象.
         code_mock = NonCallableMock(spec_set=CodeType)
         code_mock.co_flags = inspect.CO_ITERABLE_COROUTINE
         self.__dict__['__code__'] = code_mock
