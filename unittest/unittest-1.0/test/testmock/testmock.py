@@ -65,7 +65,43 @@ class MockTest(unittest.TestCase):
         # in Python 3
         exec("from unittest.mock import *")
 
-
+    ###################################################################################################################
+    # 测试Mock构造函数(实例化)完成之后的Mock对象的内部初始值是否符合预期.
+    #
+    # 下面这些 _delegating_property 都会从 mock.__dict__ 中提取对象的键值,
+    # 提取规则: "_mock_%s" % called/call_count/call_args/call_args_list/mock_calls...
+    # mock.called               _delegating_property('called')
+    # mock.call_count           _delegating_property('call_count')
+    # mock.call_args            _delegating_property('call_args')
+    # mock.call_args_list       _delegating_property('call_args_list')
+    # mock.mock_calls           _delegating_property('mock_calls')
+    #
+    # 下面这些 property(__xx, __xx) 的get和set都会触发对应的函数, 而不是直接返回一个具体值.
+    # mock.side_effect          property(__get_side_effect, __set_side_effect)
+    # mock.return_value         property(__get_return_value, __set_return_value, __return_value_doc)
+    #
+    # 所以:
+    # mock.called = False        等于访问 mock._mock_called, 它初始化(在NonCallableMock.__init__中)的值是 False.
+    # mock.call_count = 0        等于访问 mock._mock_call_count, 它初始化(在NonCallableMock.__init__中)的值是 0.
+    # mock.call_args = None      等于访问 mock._mock_call_args, 它初始化(在NonCallableMock.__init__中)的值是 None.
+    # mock.call_args_list = []   等于访问 mock._mock_call_args_list, 它初始化(在NonCallableMock.__init__中)的值是 [].
+    # mock.method_calls = []     等于访问 mock._mock_method_calls, 它初始化(在NonCallableMock.__init__中)的值是 _CallList().
+    #
+    # mock.return_value          等于访问 NonCallableMock.__get_return_value,
+    #                            1. 如果初始化Mock时提供了return_value参数,
+    #                               那么初始化过程中 CallableMixin.__init__ 内部会将其赋值给 mock._mock_return_value;
+    #                               NonCallableMock.__get_return_value内部会判断,
+    #                               如果 mock._mock_return_value 有值那么就返回该值.
+    #                            2. 如果初始化Mock时没有提供return_value参数,
+    #                               那么初始化过程中 CallableMixin.__init__ 内部
+    #                               会将 Sentinel.DEFAULT 赋值给 mock._mock_return_value;
+    #
+    # mock._mock_parent = parent 当前实例没有提供参数, mock采用默认参数: None;
+    # mock._mock_methods = spec  当前实例没有提供参数, mock采用默认参数: None;
+    # mock._mock_children = {}   Mock没有定义mock_children的形式参数,
+    #                           它在NonCallableMock.__init__中直接定义了一个空的_mock_children字典属性,
+    #                            也就是说这个属性不可配置, 它是一个内部对象(供内部机制运作使用).
+    ###################################################################################################################
     def test_constructor(self):
         mock = Mock()
 
@@ -83,6 +119,9 @@ class MockTest(unittest.TestCase):
                           "method_calls not initialised correctly")
 
         # Can't use hasattr for this test as it always returns True on a mock
+        # 不能使用 hasattr(mock, '_items'), 因为它会触发 mock.__getattr__ 方法, 然后其内部会返回一个新的(子)mock对象.
+        # 但是可以使用 '_items' in mock.__dict__ 和 hasattr(mock.__dict__, '_items'),
+        # 因为他们触发的是 __dict__ (字典)的__getitem__/__getattr__方法, 而不是mock的.
         self.assertNotIn('_items', mock.__dict__,
                          "default mock should not have '_items' attribute")
 
