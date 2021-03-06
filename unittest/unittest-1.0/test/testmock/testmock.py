@@ -42,6 +42,23 @@ def something(a): pass
 
 class MockTest(unittest.TestCase):
 
+    ###################################################################################################################
+    # 在python3中, 不可以在函数内使用 import * 语法.
+    # def hello():
+    #     from unittest.mock import *
+    #     m = Mock()
+    # hello()                                    报错: SyntaxError: import * only allowed at module level
+    #
+    # 使用 from unittest.mock import * 语法可以测试 __all__ 集合中定义的变量是否存在于unittest.mock文件中.
+    # 如果 __all__ 中定义了 unittest.mock 不存在的对象, 那么就会抛出异常.
+    #
+    # 还有另外一种情况:
+    # 当程序文件中没有定义 __all__ 时, 使用 from xxx import * 则会导入全部对象(含变量,函数,类).
+    # 当程序文件中定义了 __all__ 时, 使用 from xxx import * 则仅导入__all__中声明的对象,
+    # 没有声明在__all__集合中的对象, 不会被导入, 这相当于是启动了一层保护作用.
+    #
+    # 所以这里想要测试的是 __all__ 集合中声明的对象都存在于 unittest.mock 模块中.
+    ###################################################################################################################
     def test_all(self):
         # if __all__ is badly defined then import * will raise an error
         # We have to exec it because you can't import * inside a method
