@@ -132,7 +132,10 @@ class MockTest(unittest.TestCase):
         self.assertEqual(mock._mock_children, {},
                          "children not initialised incorrectly")
 
-
+    ###################################################################################################################
+    # Mock的return_value的默认值是 Sentinels.DEFAULT, 所以当初始化Mock时提供了实参(则会覆盖掉Sentinels.DEFAULT),
+    # 那么后续访问 mock.return_value 都会返回那个实参值.
+    ###################################################################################################################
     def test_return_value_in_constructor(self):
         mock = Mock(return_value=None)
         self.assertIsNone(mock.return_value,
