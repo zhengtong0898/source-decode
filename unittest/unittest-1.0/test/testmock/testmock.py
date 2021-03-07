@@ -260,10 +260,18 @@ class MockTest(unittest.TestCase):
             return results.pop()
         def f(): pass
 
+        # mock 是一个 <function xx at 0x0001e> 未执行函数,
+        # 对 <function xx at 0x0001e>.side_effect = [1,2,3]
+        # 等同于 <function xx at 0x0001e>.mock.side_effect 操作;
+        # 参考: mock.py#690 funcopy.side_effect = mock.side_effect
+        #
+        # 当 side_effect 是一个iterable对象时(列表/元组/generator), 每次 __call__ 触发都会提取一个元素.
         mock = create_autospec(f)
         mock.side_effect = [1, 2, 3]
         self.assertEqual([mock(), mock(), mock()], [1, 2, 3],
                           "side effect not used correctly in create_autospec")
+
+        # 测试side_effect执行函数的结果.
         # Test where side effect is a callable
         results = [1, 2, 3]
         mock = create_autospec(f)
