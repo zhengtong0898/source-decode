@@ -132,6 +132,10 @@ class Future:
             raise ValueError('_log_traceback can only be set to False')
         self.__log_traceback = False
 
+    ###################################################################################################################
+    # 对外开放的接口: 获取 self._loop 对象.
+    # 如果 self._loop 尚未赋值, 则会报错.
+    ###################################################################################################################
     def get_loop(self):
         """Return the event loop the Future is bound to."""
         loop = self._loop
@@ -139,6 +143,12 @@ class Future:
             raise RuntimeError("Future object is not initialized.")
         return loop
 
+    ###################################################################################################################
+    # 对外开放的接口: 将当前 future 对象的状态改为 _CANCELLED, 并通知 loop 去执行 callbacks.
+    #
+    # 当 self._state != _PENDING 时, 表示它已经是 _CANCELLED 或者 _FINISHED 状态,
+    # 那么就不需要再去更改状态, 也不需要再通知 loop 去执行 callbacks 了.
+    ###################################################################################################################
     def cancel(self):
         """Cancel the future and schedule callbacks.
 
@@ -153,17 +163,43 @@ class Future:
         self.__schedule_callbacks()
         return True
 
+    ###################################################################################################################
+    # 通知 loop 去执行 callbacks
+    ###################################################################################################################
     def __schedule_callbacks(self):
         """Internal: Ask the event loop to call all callbacks.
 
         The callbacks are scheduled to be called as soon as possible. Also
         clears the callback list.
         """
+        # 将所有 self._callbacks 中的成员, shadow-copy 到 callbacks 本地变量中.
+        # 这么做是因为接下来要清空 self._callbacks 对象.
+        #
+        # shadow-copy 的定义:
+        # A shallow copy constructs a new compound object and then (to the extent possible)
+        # inserts references into it to the objects found in the original.
+        # https://docs.python.org/3/library/copy.html
+        #
+        # shadow-copy 举例:
+        # class Hole: pass
+        # s = [Hole(), Hole(), Hole()]  # [<Hole object at 0x1820>, <Hole object at 0x1850>, <Hole object at 0x1970>]
+        # b = s[:]                      # [<Hole object at 0x1820>, <Hole object at 0x1850>, <Hole object at 0x1970>]
+        # 这里 shadow-copy 完成后, 两个列表的成员对象再内存中的位置是一样的,
+        # 即: 对于 Hole 对象来说它内部的reference是递增的,
+        #     当s[2]这个对象被删除之后python解释器也不会回收这个对象, 因为 b[2] 仍然在引用这个对象.
+        # 这说明 s 和 b 不是同一个内存位置的变量, 但是引用着相同位置的Hole对象.
+        #
+        # s[2] = Hole()                 # [<Hole object at 0x1820>, <Hole object at 0x1850>, <Hole object at 0xE400>]
+        # b                             # [<Hole object at 0x1820>, <Hole object at 0x1850>, <Hole object at 0x1970>]
+        # 所以, 这里改变 s[2] 的 Hole 对象, 但是 b[2] 不会发生变化;
         callbacks = self._callbacks[:]
         if not callbacks:
             return
 
+        # 清空 self._callbacks 集合
         self._callbacks[:] = []
+
+        # 挨个将 callback 丢给 loop, 通知 loop 去执行 callback.
         for callback, ctx in callbacks:
             self._loop.call_soon(callback, self, context=ctx)
 
