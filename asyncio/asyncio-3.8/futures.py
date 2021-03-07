@@ -276,6 +276,10 @@ class Future:
         self.__log_traceback = False
         return self._exception
 
+    ###################################################################################################################
+    # 只允许在当前 future 是 _PENDING 状态下添加callback回调函数到self._callbacks回调函数集合中.
+    # 否则直接通知loop去执行这个callback回调函数, 而不是添加到self._callbacks回调函数集合中.
+    ###################################################################################################################
     def add_done_callback(self, fn, *, context=None):
         """Add a callback to be run when the future becomes done.
 
@@ -283,8 +287,33 @@ class Future:
         the future is already done when this is called, the callback is
         scheduled with call_soon.
         """
+        # 不是 _PENDING 状态, 直接通知loop去执行这个函数.
         if self._state != _PENDING:
             self._loop.call_soon(fn, self, context=context)
+
+        # 是 _PENDING 状态, 添加到self._callbacks回调函数集合中.
+        #
+        # 知识点:
+        # context: contextvars.Context
+        # 这是一个类似 mock.dict 的一个东西,
+        # context是一个作用域, 它提供了run方法, 用于在该作用域中运行.
+        # 该作用域从创建到结束, 整个过程中对外部变量的set仅在作用域声明周期内起作用,
+        # 作用域结束后, 外部的变量不会发生变化. 举例:
+        # from contextvars import ContextVar, copy_context
+        #
+        # var = ContextVar('var')           # 作用域外部
+        # var.set('spam')                   # 作用域外部
+        #
+        # def main():
+        #                                   # 进入作用域
+        #     var.set('ham')                # 作用域内部:        更改 var 变量的值
+        #     print('main: ', var.get())    # 作用域内部:        main: ham
+        #                                   # 离开作用域
+        #
+        # ctx = copy_context()              # 创建作用域
+        # ctx.run(main)                     # 由 context 执行 main 函数
+        #
+        # print('outside: ', var.get())     # 作用域外部:        outside: spam
         else:
             if context is None:
                 context = contextvars.copy_context()
@@ -292,14 +321,27 @@ class Future:
 
     # New method not in PEP 3148.
 
+    ###################################################################################################################
+    # 任何状态下的 future 都可以从 self._callbacks 中移除 callback 回调函数.
+    # 返回值类型: int;
+    # 返回值描述: 返回已移除数量;
+    ###################################################################################################################
     def remove_done_callback(self, fn):
         """Remove all instances of a callback from the "call when done" list.
 
         Returns the number of callbacks removed.
         """
+        # 这里采用筛选模式, 只留下那些不等于fn的回调函数.
         filtered_callbacks = [(f, ctx)
                               for (f, ctx) in self._callbacks
                               if f != fn]
+
+        # self._callbacks: 总量集合
+        # filtered_callbacks: 已筛选集合
+        # 总量 - 已筛选 = 已移除
+        #
+        # 如果 已移除 == 0, 那么就不做任何操作, 直接返回 0
+        # 如果 已移除 != 0, 那么就将 filtered_callbacks 覆盖掉 self._callbacks.
         removed_count = len(self._callbacks) - len(filtered_callbacks)
         if removed_count:
             self._callbacks[:] = filtered_callbacks
@@ -307,16 +349,24 @@ class Future:
 
     # So-called internal methods (note: no set_running_or_notify_cancel()).
 
+    ###################################################################################################################
+    # 只允许在当前 future 是 _PENDING 状态下设定结果信息.
+    ###################################################################################################################
     def set_result(self, result):
         """Mark the future done and set its result.
 
         If the future is already done when this method is called, raises
         InvalidStateError.
         """
+        # 不是 _PENDING 状态的 future 对象, 不能设定结果信息, 这里会抛异常.
         if self._state != _PENDING:
             raise exceptions.InvalidStateError(f'{self._state}: {self!r}')
+
+        # 写入结果
         self._result = result
+        # 将当前future状态设定为_FINISHED
         self._state = _FINISHED
+        # 通知loop执行所有callbacks回调函数
         self.__schedule_callbacks()
 
     ###################################################################################################################
