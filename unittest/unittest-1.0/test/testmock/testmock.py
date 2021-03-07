@@ -141,7 +141,21 @@ class MockTest(unittest.TestCase):
         self.assertIsNone(mock.return_value,
                           "return value in constructor not honoured")
 
-
+    ###################################################################################################################
+    # create_autospec 返回的是一个 <function f at 0x00001B57DFE2340 > 对象, 该对象是一个未被执行过的函数对象, 不是Mock对象.
+    # create_autospec 的参数是 f 函数, 用于声明 f 是一个 spec 限定对象.
+    # create_autospec 虽然返回的不是一个mock对象, 但是它内部还是有创建mock对象的,
+    #                 并将其挂到 <function f at 0x00001B57DFE2340 > 的属性中,
+    #                 像下面的代码, 当执行 mock() 时, 其实是在执行  <function f at 0x00001B57DFE2340 > 对象,
+    #                 内部会先做 参数签名检查 是否与 f 限定对象的参数签名一致, 如果不一直则会报错.
+    #                 内部然后再执行 <function f at 0x00001B57DFE2340 >.mock(),
+    #                 从而触发 mock.__call__ 来获取 mock.return_value 的值.
+    #
+    # 补充:
+    # 当函数 f 定义了形式参数时, 例如: def f(first_thing): pass
+    # 那么下面的 mock() 就会报错, 必须要 mock(first_thing="brush_teeth") 才符合参数签名检查.
+    # 也就是说 f 这个限定对象, 在这里就是那个要被模拟(MOCK)的对象.
+    ###################################################################################################################
     def test_change_return_value_via_delegate(self):
         def f(): pass
         mock = create_autospec(f)

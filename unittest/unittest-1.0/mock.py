@@ -629,11 +629,15 @@ def _set_signature(mock, original, instance=False):
     context = {'_checksig_': checksig, 'mock': mock}
 
     # 定义一个函数, 该函数返回mock对象.
+    # _checksig_ 是对 sig 进行参数签名验证, 而 sig 是一个 spec 的参数签名.
+    # mock 是从 context 中读取的mock对象, 是一个已经实例化的mock对象,
+    # 所以这里return的不是一个新的mock对象, 而是触发mock.__call__方法.
     src = """def %s(*args, **kwargs):
     _checksig_(*args, **kwargs)
     return mock(*args, **kwargs)""" % name
 
     # 创建一个函数, 并且写入到context中.
+    # 这里只是创建函数, 并不是执行这个函数.
     exec (src, context)
 
     # 从context中提取出函数.
