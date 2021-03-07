@@ -285,6 +285,16 @@ class MockTest(unittest.TestCase):
 
         mock = create_autospec(f)
         mock.side_effect = ValueError('Bazinga!')
+
+        # assertRaisesRegex 会执行 mock 函数,
+        # _AssertRaisesContext.__exit__ 会将报错信息 和 'Bazinga!' 做正则匹配,
+        # 匹配成功则不会报错,
+        # 匹配失败则会将失败信息暂存在unittest.runner.TextTestRunner的failures中, 所有case执行完成之后, 统一打印错误信息.
+        #
+        # 备注:
+        # 报错处理优先级(顺序):
+        # 1. 先进入 with 关键字的 __exit__
+        # 2. 再进入 try except 的 Exception 条件块.
         self.assertRaisesRegex(ValueError, 'Bazinga!', mock)
 
 
