@@ -18,6 +18,12 @@ from . import format_helpers
 isfuture = base_futures.isfuture
 
 
+#######################################################################################################################
+# Future有三种状态
+# _PENDING: 进行中
+# _CANCELLED: 已取消
+# _FINISHED: 已结束
+#######################################################################################################################
 _PENDING = base_futures._PENDING
 _CANCELLED = base_futures._CANCELLED
 _FINISHED = base_futures._FINISHED
