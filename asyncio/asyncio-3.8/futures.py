@@ -252,6 +252,9 @@ class Future:
         # 返回结果
         return self._result
 
+    ###################################################################################################################
+    # 如果当前 future 的状态是 _FINISHED 时, 才会返回异常结果.
+    ###################################################################################################################
     def exception(self):
         """Return the exception that was set on this future.
 
@@ -260,10 +263,16 @@ class Future:
         CancelledError.  If the future isn't done yet, raises
         InvalidStateError.
         """
+        # 如果 self._state == _CANCELLED, 表示当前 future 的状态是已取消状态, 这里会直接抛异常, 而不是返回一个异常对象.
         if self._state == _CANCELLED:
             raise exceptions.CancelledError
+
+        # 如果 self._state != _FINISHED, 表示当前 future 的状态可能是 _PENDING 或 _CANCELLED,
+        # 这表示异常对象还没有设定(future.set_exception), 所以这里会直接抛异常, 而不是返回一个异常对象.
         if self._state != _FINISHED:
             raise exceptions.InvalidStateError('Exception is not set.')
+
+        # 代码进入到这里表示, self._exception 已经被设定过了, 所以这里可以返回 self._exception 异常对象.
         self.__log_traceback = False
         return self._exception
 
@@ -310,22 +319,35 @@ class Future:
         self._state = _FINISHED
         self.__schedule_callbacks()
 
+    ###################################################################################################################
+    # 只允许在当前 future 是 _PENDING 状态下设定异常信息.
+    ###################################################################################################################
     def set_exception(self, exception):
         """Mark the future done and set an exception.
 
         If the future is already done when this method is called, raises
         InvalidStateError.
         """
+        # 不是 _PENDING 状态的 future 对象, 不能设定异常信息, 这里会抛异常.
         if self._state != _PENDING:
             raise exceptions.InvalidStateError(f'{self._state}: {self!r}')
+
+        # 参数 exception 如果类型是 type 的话, 表示它是一个类对象, 尚未被初始化, 这里期望的是一个已实例化的异常对象.
         if isinstance(exception, type):
             exception = exception()
+
+        # Future对象不是一个generators对象, 所以不允许设定这个异常对象.
         if type(exception) is StopIteration:
             raise TypeError("StopIteration interacts badly with generators "
                             "and cannot be raised into a Future")
+
+        # 写入异常对象
         self._exception = exception
+        # 将当前future状态设定为_FINISHED
         self._state = _FINISHED
+        # 通知loop执行所有callback回调函数.
         self.__schedule_callbacks()
+        # TODO: 待补充
         self.__log_traceback = True
 
     def __await__(self):
