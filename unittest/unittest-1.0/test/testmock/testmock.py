@@ -213,6 +213,11 @@ class MockTest(unittest.TestCase):
         mock = Mock()
         self.assertNotIn("spec", repr(mock))
 
+        # 对 Mock/NonCallableMock 类对象来说, 当 spec 是一个列表/元组时, 不将其作为限定对象.
+        #
+        # 备注:
+        # 对 create_autospec 函数来说, 当 spec 是一个列表/元组时,
+        # 另有他用(将其视为是一个list限定对象), 参考: mock.py#4367: if _is_list(spec): spec = type(spec)
         mock = Mock(spec=['foo'])
         self.assertNotIn("spec", repr(mock))
 
