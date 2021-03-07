@@ -51,6 +51,13 @@ class Future:
     (In Python 3.4 or later we may be able to unify the implementations.)
     """
 
+    # 这些重要的变量定义在这里, 需要格外注意:
+    # 1. 已实例化的对象, 在第一次访问 self._loop 时, 其实是访问到 Future._loop 的值.
+    # 2. 已实例化的对象, 做赋值操作 self._loop = xxx 并不会影响 Future._loop 的值.
+    # 从这两个表现来看, 变量定义在这里的作用和目的是:
+    # 1. 可以充当默认值.
+    # 2. 如果想要一劳永逸的话, 可以直接 Future._loop = events.get_event_loop() 那么后续的代码就不需要再每次都做获取的动作,
+    #    这也就延申出来为什么在 __init__ 中会有 if loop is None 这个条件句, 就是为了支持一劳永逸的做法.
     # Class variables serving as defaults for instance variables.
     _state = _PENDING
     _result = None
@@ -67,7 +74,7 @@ class Future:
     #   the difference between
     #   `await Future()` or`yield from Future()` (correct) vs.
     #   `yield Future()` (incorrect).
-    _asyncio_future_blocking = False
+    _asyncio_future_blocking = False                # 该属性用于标识当前对象是一个Future对象.
 
     __log_traceback = False
 
@@ -79,10 +86,16 @@ class Future:
         the default event loop.
         """
         if loop is None:
+            # 由于 asyncio 是单线程循环机制, 所以这里获取 loop 就是获取那个正在运行的loop
+            # TODO: events.get_event_loop() 源码说明待补充.
             self._loop = events.get_event_loop()
         else:
+            # 如果在实例化之前已经给Future._loop单独设定过 loop 对象,
+            # 那么这里就不会再去尝试获取, 而是直接拿来使用(写入到self._loop)实例中.
             self._loop = loop
+
         self._callbacks = []
+
         if self._loop.get_debug():
             self._source_traceback = format_helpers.extract_stack(
                 sys._getframe(1))
