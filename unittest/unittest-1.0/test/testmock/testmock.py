@@ -225,6 +225,7 @@ class MockTest(unittest.TestCase):
     def test_side_effect(self):
         mock = Mock()
 
+        # 这里测试 side_effect 报错是否符合预期, 同时也再测试参数签名是否准确.
         def effect(*args, **kwargs):
             raise SystemError('kablooie')
 
@@ -232,6 +233,7 @@ class MockTest(unittest.TestCase):
         self.assertRaises(SystemError, mock, 1, 2, fish=3)
         mock.assert_called_with(1, 2, fish=3)
 
+        # 这里测试 side_effect 的函数执行功能, 同时也是测试 effect 函数对外部变量(results)的处理.
         results = [1, 2, 3]
         def effect():
             return results.pop()
@@ -240,10 +242,12 @@ class MockTest(unittest.TestCase):
         self.assertEqual([mock(), mock(), mock()], [3, 2, 1],
                           "side effect not used correctly")
 
+        # 这里测试 side_effect 赋值是否有效.
         mock = Mock(side_effect=sentinel.SideEffect)
         self.assertEqual(mock.side_effect, sentinel.SideEffect,
                           "side effect in constructor not used")
 
+        # 这里测试 side_effect 和 return_value 返回的优先级, 因该有限返回 return_value.
         def side_effect():
             return DEFAULT
         mock = Mock(side_effect=side_effect, return_value=sentinel.RETURN)
