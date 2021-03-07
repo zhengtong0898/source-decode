@@ -203,12 +203,18 @@ class Future:
         for callback, ctx in callbacks:
             self._loop.call_soon(callback, self, context=ctx)
 
+    ###################################################################################################################
+    # 如果当前 future 的状态是 _CANCELLED 状态, 则返回 True, 否则返回 False.
+    ###################################################################################################################
     def cancelled(self):
         """Return True if the future was cancelled."""
         return self._state == _CANCELLED
 
     # Don't implement running(); see http://bugs.python.org/issue18699
 
+    ###################################################################################################################
+    # 如果当前 future 的状态是 _CANCELLED 或 _FINISHED, 则返回True(表示已结束), 否则返回False(表示进行中).
+    ###################################################################################################################
     def done(self):
         """Return True if the future is done.
 
@@ -217,6 +223,9 @@ class Future:
         """
         return self._state != _PENDING
 
+    ###################################################################################################################
+    # 如果当前 future 的状态是 _FINISHED 时, 才会返回结果.
+    ###################################################################################################################
     def result(self):
         """Return the result this future represents.
 
@@ -224,13 +233,23 @@ class Future:
         future's result isn't yet available, raises InvalidStateError.  If
         the future is done and has an exception set, this exception is raised.
         """
+        # 只要 self._state 不是 _FINISHED 状态, 那么都会报错.
+        #
+        # 当 self._state 是 _CANCELLED 状态时, 抛出 exceptions.CancelledError
+        # 当 self._state 是 _PENDING 状态时, 抛出 exceptions.InvalidStateError('Result is not ready.')
         if self._state == _CANCELLED:
             raise exceptions.CancelledError
         if self._state != _FINISHED:
             raise exceptions.InvalidStateError('Result is not ready.')
+
+        # 进入到这里表示, self._state == _FINISHED
+
+        # 在返回结果之前, 先检查是否含有异常信息.
         self.__log_traceback = False
         if self._exception is not None:
             raise self._exception
+
+        # 返回结果
         return self._result
 
     def exception(self):
