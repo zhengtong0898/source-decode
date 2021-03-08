@@ -422,7 +422,33 @@ class Future:
         # TODO: 待补充
         self.__log_traceback = True
 
-    # TODO: yield 和 return 会出现什么效果, 需要自己写代码来测试.
+    # 样例代码:
+    # import asyncio
+    #
+    # async def hello(future):
+    #     future.set_result("good")
+    #
+    # async def main():
+    #     fut = asyncio.Future()
+    #
+    #     # 创建任务
+    #     loop = asyncio.get_event_loop()
+    #     loop.create_task(hello(fut))
+    #
+    #     # 等待结果
+    #     # future.__await__ 内部
+    #     ss = await fut
+    #
+    #     print("ss: ", ss)
+    #
+    # asyncio.run(main())
+    #
+    # 首先: 从python3.6开始, 允许 coroutine 函数体内写 return 语法.
+    # 其次: async 和 yield 的组合使用, 使函数变成一个 async generator 对象.
+    #
+    # 由于 Future 这个对象没有定义 __next__ 魔法方法, 所以直接使用 next(future) 会报错,
+    # 那么外部触发 yield 只有一种办法: generator.send().
+    # 而tasks.Task.__step中使用 result = coro.send(None) 来唤醒 yield后续的代码.
     def __await__(self):
         if not self.done():
             self._asyncio_future_blocking = True
