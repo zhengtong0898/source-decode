@@ -32,6 +32,28 @@ _FINISHED = base_futures._FINISHED
 STACK_DEBUG = logging.DEBUG - 1  # heavy-duty debugging
 
 
+#######################################################################################################################
+#
+# ANY STATE:
+#     future.done():                    获取完成状态bool值, _FINISHED 或 _CANCELLED 返回 True; _PENDING 返回 False.
+#     future.cancelled():               获取已取消bool值, _CANCELLED 返回 True; _PENDING 和 _FINISHED 返回 False.
+#     future.remove_done_callbacks():   从 self._callbacks 中移除某个回调函数.
+#
+# _PENDING:
+#     future.cancel():                  将future状态设定为取消状态, 并且通知执行回调函数.
+#     future.add_done_callbacks():      将回调函数添加到self._callbacks回调集合.
+#     future.set_result():              将结果写入到 self._result 中, 将状态更改为_FINISHED, 通知 loop 执行所有回调函数.
+#     future.set_exception()            将异常对象写入到 self._exception 中, 将状态更改为_FINISHED, 通知 loop 执行所有回调函数.
+#
+# _CANCELLED:
+#     future.add_done_callbacks():      直接通知 loop 执行回调函数, 不将其加入self._callbacks回调集合.
+#
+# _FINISHED:
+#     future.result():                  获取结果
+#     future.exception():               获取异常结果
+#     future.add_done_callbacks():      直接通知 loop 执行回调函数, 不将其加入self._callbacks回调集合
+#
+#######################################################################################################################
 class Future:
     """This class is *almost* compatible with concurrent.futures.Future.
 
@@ -400,6 +422,7 @@ class Future:
         # TODO: 待补充
         self.__log_traceback = True
 
+    # TODO: yield 和 return 会出现什么效果, 需要自己写代码来测试.
     def __await__(self):
         if not self.done():
             self._asyncio_future_blocking = True
