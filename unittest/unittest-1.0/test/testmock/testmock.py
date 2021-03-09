@@ -300,21 +300,45 @@ class MockTest(unittest.TestCase):
 
     def test_reset_mock(self):
         parent = Mock()
+
+        # spec 如果是一个对象, 那么它将被用来充当限定对象(它有那些属性, 那么就只能访问或者赋值给这些属性, 否则报错).
+        # spec 如果是一个列表, 那么这个列表就是一个限定集合(只能访问或赋值给这个限定结合, 否则报错).
         spec = ["something"]
         mock = Mock(name="child", parent=parent, spec=spec)
+
+        # 调用mock(触发mock.__call__), 内部: 保存调用参数签名, 追加统计信息.
         mock(sentinel.Something, something=sentinel.SomethingElse)
+
+        # something不存在于mock属性中, 在 __getattr__ 中尝试创建一个新的mock返回并赋值给something变量.
         something = mock.something
+
+        # 调用一次mock.something, 那么mock.something._mock_called == True
         mock.something()
+
+        # 更改 mock.side_effect 的值
         mock.side_effect = sentinel.SideEffect
+
+        # 由于上面初始化时没有提供return_value参数, 这里回返回一个mock对象.
+        # 对应的, return_value() 等同于 mock._mock_return_value(),
+        # mock._mock_return_value.called = True
         return_value = mock.return_value
         return_value()
 
+        # 这里除了重置mock对象, 也会递归的去执行子mock的reset_mock().
+        # mock.something 是子mock
+        # mock.return_value 不是子mock
+        # 因为 mock.something 触发的是 __getattr__ , 在创建mock之后会将其纳入到 mock._mock_children 中.
+        # 而 mock.return_value 触发的是 __get_return_value, 该方法只创建mock不纳入 mock._mock_children 中.
+        # 虽然 mock._mock_return_value 不是子mock, 但是 reset_mock 最后一段代码还是单独处理(reset)了 _mock_return_value.
         mock.reset_mock()
 
+        # 重置mock不更改name, 所以这里期望的是实例化时提供的参数值.
         self.assertEqual(mock._mock_name, "child",
                          "name incorrectly reset")
+        # 重置mock不更改parent, 所以这里期望的是实例化时提供的参数值.
         self.assertEqual(mock._mock_parent, parent,
                          "parent incorrectly reset")
+        # 重置mock不更改spec, 所以这里期望的是实例化时提供的参数值.
         self.assertEqual(mock._mock_methods, spec,
                          "methods incorrectly reset")
 
@@ -329,13 +353,24 @@ class MockTest(unittest.TestCase):
 
         self.assertEqual(mock.side_effect, sentinel.SideEffect,
                           "side_effect incorrectly reset")
+
+        # reset_mock()
+        # 参数return_value默认值是False(意思是: 不要重置mock._mock_return_value的值)
+        # 参数return_valuem如果是True(意思是: 重置mock._mock_return_value的值为 sentinel.DETAULT)
+        # 这里的选择是不重置return_value, 所以这里期望的是 mock.return_value == mock == return_value;
         self.assertEqual(mock.return_value, return_value,
                           "return_value incorrectly reset")
+
+        # mock._mock_return_value 已重置, 所以这里预期是 False.
         self.assertFalse(return_value.called, "return value mock not reset")
+
+        # reset_mock 不重置 _mock_children 集合, 所以这里预期不变.
         self.assertEqual(mock._mock_children, {'something': something},
                           "children reset incorrectly")
         self.assertEqual(mock.something, something,
                           "children incorrectly cleared")
+
+        # reset_mock 充值了子mock, 所以这里期望的是False.
         self.assertFalse(mock.something.called, "child not reset")
 
 

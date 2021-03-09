@@ -1208,6 +1208,9 @@ class NonCallableMock(Base):
         # 代码执行到这里, spec由可能是两种类型的值:
         # 1. list
         # 2. None
+        #
+        # 当 spec 是 list 时, 它应该是一个属性范围(充当限定对象的角色).
+        # 即: 当为mock设定一个新的属性时, 不在这个list范围中(也不再mock属性范围中), 那么就会报错.
         __dict__ = self.__dict__
         __dict__['_spec_class'] = _spec_class
         __dict__['_spec_set'] = spec_set
