@@ -162,7 +162,15 @@ class MockTest(unittest.TestCase):
         mock.mock.return_value = 1
         self.assertEqual(mock(), 1)
 
-
+    ###################################################################################################################
+    # 一般情况下 self.assertTrue(实际运行结果值, 预期返回值, 错误信息);
+    # 但是对报错的预期不能这么写, 因为这样写并不能捕获异常, 也不能对异常设定预期.
+    #
+    # self.assertRaises 返回一个 _AssertRaisesContext 对象, 它在实例化时期望形式参数是 Exception 类型(暂存于self.expected).
+    # 关键字 with 作用于 _AssertRaisesContext.__enter__ 和 _AssertRaisesContext.__exit__,
+    # 其中 __enter__ 仅返回self; 异常匹配的环节留在 __exit__ 中进行匹配;
+    # 异常信息和预期异常匹配命中则返回True, 匹配不命中则会将异常抛给unittest.case.TestCase, 它会在退出程序时统一打印出异常信息.
+    ###################################################################################################################
     def test_change_side_effect_via_delegate(self):
         def f(): pass
         mock = create_autospec(f)
