@@ -95,6 +95,11 @@ def _set_task_name(task, name):
             set_name(name)
 
 
+#######################################################################################################################
+# Task
+# Task 是 asyncio 重要的一个成员, 服务于开发者, 用于将 coroutine 函数推送给 loop 去执行.
+# Task 本身继承了 Future 对象, 主要是为了保存一些状态(Pending/Cancelled/Finished)和异常信息.
+#######################################################################################################################
 class Task(futures._PyFuture):  # Inherit Python Task implementation
                                 # from a Python Future implementation.
 
@@ -141,27 +146,46 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
                       stacklevel=2)
         return _all_tasks_compat(loop)
 
+    ###############################################################################################################
+    # 参数 coro: 期望一个coroutine对象(在python3.6之后是 async def 对象).
+    #
+    # 备注:
+    # 参数 * 号右侧的参数表示, 在提供 loop, name 这两个实参时, 必须提供参数名称.
+    ###############################################################################################################
     def __init__(self, coro, *, loop=None, name=None):
         super().__init__(loop=loop)
         if self._source_traceback:
             del self._source_traceback[-1]
+
+        # 如果参数 coro 的值不是一个coroutine对象那么就会抛出异常.
         if not coroutines.iscoroutine(coro):
             # raise after Future.__init__(), attrs are required for __del__
             # prevent logging for pending task in __del__
             self._log_destroy_pending = False
             raise TypeError(f"a coroutine was expected, got {coro!r}")
 
+        # 如果没有提供name参数, 那么这里按 Task-number 来命名这个任务.
         if name is None:
             self._name = f'Task-{_task_name_counter()}'
         else:
             self._name = str(name)
 
+        # TODO: 待补充
         self._must_cancel = False
+        # TODO: 待补充
         self._fut_waiter = None
+
+        # 将 coro 函数, 存储在 self._coro 中(目的是: 强引用保留对象不被回收.)
         self._coro = coro
         self._context = contextvars.copy_context()
 
+        # 将任务推送给 loop .
         self._loop.call_soon(self.__step, context=self._context)
+
+        # 将当前 Task 加入到弱引用集合
+        # 弱引用就是引用, 只不过是当对象存在时, 可以跟引用一样正常使用,
+        # 当对象被销毁之后, 弱引用的属性或方法的调用将会触发异常报错,
+        # 所以, 弱引用通常在使用之前都要判断一下弱引用是否有效.
         _register_task(self)
 
     def __del__(self):
