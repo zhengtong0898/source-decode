@@ -178,7 +178,28 @@ class MockTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             mock()
 
-
+    ###################################################################################################################
+    # repr在 _extract_mock_name 中采用了递归提取所有parent的name, 纳入一个集合然后再将其反转, 得出一个正向的调用路径.
+    # 这个代码主要时测试repr能不能正确的将调用路径打印出来, 举例:
+    # self.assertIn('%s()().foo.bar.baz().bing' % name, repr(mock()().foo.bar.baz().bing))
+    # mock = Mock(name='foo')   实例化一个mock对象
+    # mock()                    触发 __call__ 方法, 由于没有提供return_value, 也没有提供side_effect,
+    #                           所以会进入这个方法 mock.__get_return_value 试图返回一个新的子mock对象,
+    #                           该子mock对象的name参数是'()', 表示执行了一次mock.
+    #
+    # ()                        触发 __call__ 方法, 同样会进入 mock.__get_return_value, 同样会返回一个新的子mock对象.
+    #                           该子mock对象的name参数也是'()', 表示执行了一次mock.
+    #
+    # .foo                      触发 __getattr__ 方法, 在该方法中创建一个子mock对象(name='foo', _new_name='foo'),
+    #                           并返回该mock对象, 当使用print或repr()触发 __repr__ 时, 会递归parent去提取所有的_mock_new_name,
+    #                           存储在一个列表中, 然后再使用reverse将列表反转过来.
+    #
+    # .bar                      触发 __getattr__ 方法, 描述与 .foo 一样
+    #
+    # .baz()                    先触发 __getattr__ 方法, 然后再触发 __call__ 方法.
+    #
+    # .bing                     触发 __getattr__ 方法, 描述与 .foo 一样
+    ###################################################################################################################
     def test_repr(self):
         mock = Mock(name='foo')
         self.assertIn('foo', repr(mock))
