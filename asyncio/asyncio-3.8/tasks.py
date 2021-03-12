@@ -170,8 +170,13 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
         else:
             self._name = str(name)
 
-        # TODO: 待补充
+        # 这是一个私有变量, 外部程序篡改该值会出现不可预期的行为.
+        # 这个变量只有 Task.cancel 方法可以设定为 True, 用于表示取消当前 Task 任务.
+        # 由于 task 任务的执行不取决于它自己, 决定权在 loop 对象上,
+        # 因此能做的就是标记和声明任务是取消状态, 当 loop 开始执行 task 任务时(self.__step),
+        # task会执行之前检查 self._must_cancel 是不是 True, 如果是True则抛出异常或者跳过执行.
         self._must_cancel = False
+        
         # TODO: 待补充
         self._fut_waiter = None
 
@@ -211,9 +216,15 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
     def set_name(self, value):
         self._name = str(value)
 
+    ###################################################################################################################
+    # 不让开发者调用Task.set_result方法, 但是内部可以使用 super().set_result() 方式来做一些其他事情.
+    ###################################################################################################################
     def set_result(self, result):
         raise RuntimeError('Task does not support set_result operation')
 
+    ###################################################################################################################
+    # 不让开发者调用Task.set_exception方法, 但是内部可以使用 super().set_exception() 方式来做一些其他事情.
+    ###################################################################################################################
     def set_exception(self, exception):
         raise RuntimeError('Task does not support set_exception operation')
 
