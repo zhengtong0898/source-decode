@@ -416,14 +416,35 @@ class MockTest(unittest.TestCase):
 
     def test_call(self):
         mock = Mock()
+
+        # 空参数实例化mock的情况下(return_value为sentinel.DEFAULT),
+        # mock.return_value 触发 __get_return_value,
+        # 返回一个子mock对象, _new_name='()'.
+        # 子mock是 Mock对象, 所以这里是True
         self.assertTrue(is_instance(mock.return_value, Mock),
                         "Default return_value should be a Mock")
 
+        # 前面调用 mock.return_value, 导致 mock.return_value 从 sentinel.DEFAULT 变成了子mock对象.
+        # 又因为 __call__ 里面判断说: 当 self._mock_return_value 不是 sentinel.DEFAULT 时, 返回 self.return_value.
+        # 所以这里直接执行 mock() 返回的是 mock.return_value 的值(也就是那个子mock对象).
+        # 因此这里测试的就是这个条件句.
         result = mock()
         self.assertEqual(mock(), result,
                          "different result from consecutive calls")
+
+        # 重置mock
+        # return_value默认是False, 表示不重置 mock._mock_return_value,
+        # 所以这里 mock._mock_return_value 是一个子mock对象.
         mock.reset_mock()
 
+        # 执行一次mock, 传递的参数是 sentinel.Arg;
+        # 期望:
+        # mock.called           == True
+        # mock.call_count       == 1
+        # mock.call_args        == ((sentinel.Arg,), {}) == (args, kwargs)
+        # mock.call_args.args   == (sentinel.Arg, )
+        # mock.call_args.kwargs == {}
+        # mock.call_args_list   == [((sentinel.Arg, ), {}) ]
         ret_val = mock(sentinel.Arg)
         self.assertTrue(mock.called, "called not set")
         self.assertEqual(mock.call_count, 1, "call_count incoreect")
@@ -436,7 +457,13 @@ class MockTest(unittest.TestCase):
         self.assertEqual(mock.call_args_list, [((sentinel.Arg,), {})],
                          "call_args_list not initialised correctly")
 
+        # 更改 mock.return_value 的值, 触发 __set_return_value 方法完成赋值.
         mock.return_value = sentinel.ReturnValue
+        # 验证返回值 ret_val 是 sentinel.ReturnValue
+        # 并期望:
+        # mock.call_count == 2
+        # mock.call_args == ((sentinel.Arg, {'key': sentinel.KeyArg}))
+        # mock.call_args_list == [ ((sentinel.Arg, ), {}), ((sentinel.Arg, ), {'key': sentinel.KeyArg}) ]
         ret_val = mock(sentinel.Arg, key=sentinel.KeyArg)
         self.assertEqual(ret_val, sentinel.ReturnValue,
                          "incorrect return value")
