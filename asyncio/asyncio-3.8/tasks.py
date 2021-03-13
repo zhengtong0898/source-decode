@@ -176,8 +176,10 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
         # 因此能做的就是标记和声明任务是取消状态, 当 loop 开始执行 task 任务时(self.__step),
         # task会执行之前检查 self._must_cancel 是不是 True, 如果是True则抛出异常或者跳过执行.
         self._must_cancel = False
-        
-        # TODO: 待补充
+
+        # 这是一个私有变量, 外部程序篡改该值会出现不可预期的行为.
+        # 变量类型: Future
+        # 用于暂存 coro 执行过程中挂起的 Future 对象.
         self._fut_waiter = None
 
         # 将 coro 函数, 存储在 self._coro 中(目的是: 强引用保留对象不被回收.)
@@ -296,19 +298,45 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
         return True
 
     def __step(self, exc=None):
+        # 如果当前任务已经是 Cancelled 或 Finished 转台, 那么就抛出异常.
         if self.done():
             raise exceptions.InvalidStateError(
                 f'_step(): already done: {self!r}, {exc!r}')
+
+        # self._must_cancel == True, 意味着已经声明取消当前 task.
+        # 所以这里会定义 exc 异常对象信息, 后续再执行 coro 的时候就会 coro.throw(exc)
         if self._must_cancel:
             if not isinstance(exc, exceptions.CancelledError):
                 exc = exceptions.CancelledError()
             self._must_cancel = False
+
         coro = self._coro
         self._fut_waiter = None
 
         _enter_task(self._loop, self)
         # Call either coro.throw(exc) or coro.send(None).
         try:
+            # 定义了async def 的函数, 都是 coroutine 对象.
+            # coroutine 有三种运作方式:
+            # 1. 通过 return 关键字返回一个具体值.(抛出一个 StopIteratorException)
+            # 2. 通过 await 关键字, 递归进入被await的那个函数, 被await的函数返回一个具体值.(抛出一个 StopIteratorException).
+            # 3. 通过 await 关键字, 递归进入被await的那个函数, 被await的函数返回一个Future,
+            #    由于 Future.__await__ 中有定义 yield self, 所以这里不会抛出 StopIteratorException.
+            #    也正是因为 Future.__await__ 中定义了 yield self,
+            #    它会把 coroutine 这个函数给hang住, 让 loop 可以继续去执行其他代码, 举例:
+            #    def hello():
+            #        count = 1
+            #        while True:
+            #            yield count
+            #            count += 1
+            #
+            #    h = hello()
+            #    print(h.send(None))             # 1
+            #    print(h.send(None))             # 2
+            #    print(h.send(None))             # 3
+            #    print(h.send(None))             # 4
+            #
+            #    这段代码完全没有堵塞, yield每次都会返回一个值, 并且hang住, 不会堵塞主程序.
             if exc is None:
                 # We use the `send` method directly, because coroutines
                 # don't have `__iter__` and `__next__` methods.
@@ -316,22 +344,38 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
             else:
                 result = coro.throw(exc)
         except StopIteration as exc:
+            # 如果抛出异常, 代表 coroutine 函数对象已经执行结束了, 并且返回一个具体值(没有值的话就是None).
             if self._must_cancel:
                 # Task is cancelled right before coro stops.
                 self._must_cancel = False
                 super().cancel()
             else:
+                # 从 exc 异常对象中提取返回值, 保存在 task.result (task也是一个Future) 中.
                 super().set_result(exc.value)
         except exceptions.CancelledError:
+            # 如果在 coroutine 函数对象中, 主动抛出 CancelledError,
+            # 那么这里就将task状态更改为 Cancelled, 并通知执行所有的callbacks.
             super().cancel()  # I.e., Future.cancel(self).
         except (KeyboardInterrupt, SystemExit) as exc:
+            # 如果在 coroutine 函数对象正在运行过程中, 由人工手工 Ctrl + C 触发异常,
+            # 那么就将 task 状态更改为 Cancelled, 并通知执行所有的callbacks.
             super().set_exception(exc)
             raise
         except BaseException as exc:
+            # 如果在 coroutine 函数对象中, 任何代码异常都会进入到这里,
+            # 这里会将 Task 状态更改为 Cancelled, 并通知执行所有的callbacks.
             super().set_exception(exc)
         else:
+            # 代码进入到这里表示 coroutine 还没有运行结束, 同时也没有报错, 可以确定的是 coroutine 里面一定使用了 yield.
+            # 那么接下来要做的就是判断 result 是个什么东西,
+            # 1. 如果 result._asyncio_future_blocking 属性存在, 那么它就是一个Future(也就是进入: if blocking is not None 条件块.)
+            # 2. 如果 result 是 None, 那么就表示 yield None(也就是进入: elif result is None), 为了能把 coroutine 执行完,
+            #    这里还是会将self.__step(自己)再次丢给 loop 让它再执行一次, 把整个 coroutine 函数执行完.
+            # 3. 如果 result 是 generator 函数对象(也就是进入: elif inspect.isgenerator), 那么就抛出异常.
+            # 4. 其他情况(也就是进入: else ), 那么就抛出异常了.
             blocking = getattr(result, '_asyncio_future_blocking', None)
             if blocking is not None:
+                # TODO: 会有多个 loop ?
                 # Yielded Future must come from Future.__iter__().
                 if futures._get_loop(result) is not self._loop:
                     new_exc = RuntimeError(
@@ -346,10 +390,19 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
                         self._loop.call_soon(
                             self.__step, new_exc, context=self._context)
                     else:
+                        # 代码进入到这里表示: result._asyncio_future_blocking == True,
+                        # 意味着当前这个 Future 是堵塞状态, 稍后在执行.
+                        #
+                        # 然而这里紧接着就将 result._asyncio_future_blocking 设置为 False,
+                        # 目的是告诉 self.__wakeup (add_done_callback), 下次执行的时候不是堵塞状态.
                         result._asyncio_future_blocking = False
                         result.add_done_callback(
                             self.__wakeup, context=self._context)
+
+                        # 将 result 这个 Future 暂存到 self._fut_waiter 属性中.
                         self._fut_waiter = result
+
+                        # 如果声明了取消任务, 那么这里就将 self._fut_waiter 设定为取消.
                         if self._must_cancel:
                             if self._fut_waiter.cancel():
                                 self._must_cancel = False
