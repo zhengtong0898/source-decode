@@ -479,6 +479,64 @@ class MockTest(unittest.TestCase):
             "call_args_list not set")
 
 
+    ###################################################################################################################
+    # 从现在开始看函数名字, 自己通过分析源码来写测试, 然后再与实际测试相比较; 锻炼自己写测试用例的能力.
+    ###################################################################################################################
+
+
+    def test_call_args_comparison_bymyself(self):
+        """
+        背景介绍
+        call_args 是 mock 对象中的一个 property 对象,
+        当通过执行 mock.call_args 指令时, 实际上是再访问 mock._mock_call_args .
+
+        mock = Mock() 初始化时 _mock_call_args 属性的默认值是 None,
+        mock() 调用mock时, 会在 NonCallableMock._increment_mock_call 中为 _mock_call_Args 赋值:
+            _call = _Call((args, kwargs), two=True)
+            self.call_args = _call
+
+
+        明确测试目标
+        call_args 的类型是 _Call 对象, 所以实际上是测试 _Call 对象的比较机制.
+
+        测试范围
+        围绕 _Call.__eq__ 中的每个条件句进行测试.
+        1. 测试 ANY 对象: 如果 other 是 ANY, 那么就返回True表示它们是相同的.
+        2. 测试 _mock_parent: 如果两个 _mock_parent 不一样, 那么就返回False表示不一样.
+        3. 测试 多种参数组合 比较.
+        """
+        ss = _Call((['a', 'b', 'c'], {'d': 1, 'e': 2}))
+        self.assertEqual(ss, mock.ANY, "_Call 与 ANY 对象比较时, 应该总是返回True.")
+
+        m = Mock()
+        bb = _Call((['a', 'b', 'c'], {'d': 1, 'e': 2}), parent=m)
+        self.assertEqual(ss, bb, "只有当两个 _Call 同时拥有parent的时候, 才做比较.")
+
+        cc = _Call((['a', 'b', 'c'], {'d': 1, 'e': 2}), parent=m)
+        self.assertEqual(bb, cc, "两个 _Call 对象的 parent 不一致.")
+
+        m2 = Mock()
+        dd = _Call((['a', 'b', 'c'], {'d': 1, 'e': 2}), parent=m2)
+        self.assertNotEqual(cc, dd, "两个 _Call 对象的 parent 不一致.")
+
+        mock_comp = Mock()
+        mock_comp()
+        mock_comp("ok")
+        mock_comp("good", "morning")
+        mock_comp("good", "morning", oooo="xxxx")
+        self.assertEqual(mock_comp.call_args_list, [((), {}),
+                                                    (("ok",), {}),
+                                                    (("good", "morning"), {}),
+                                                    (("good", "morning"), {"oooo":"xxxx"})])
+        """
+        总结: 
+        测试范围列出了三个测试case, 
+        这里将三个测试case写在了一起, 
+        虽然都是参数比较, 但官方的测试case时将它们分开来.
+        
+        官方是尽量使用 sentinel 来配合测试, 而我是采用字符串测试.
+        """
+
     def test_call_args_comparison(self):
         mock = Mock()
         mock()
