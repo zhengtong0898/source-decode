@@ -264,6 +264,12 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
         """
         return base_tasks._task_print_stack(self, limit, file)
 
+    ###################################################################################################################
+    # 彻底覆盖 Future 的 cancel 接口, 因为它并没有执行 super().cancel, 所以说是彻底覆盖.
+    #
+    # Future.cancel 是将状态设定为 Cancelled 并且将所有的_callbacks推送(通知)给 loop 去执行.
+    # task.cancel 是将等待的那个Future(即: self._fut_waiter)的状态设定为Cancelled, 并且声明当前任务是取消状态(self._must_cancel).
+    ###################################################################################################################
     def cancel(self):
         """Request that this task cancel itself.
 
@@ -297,6 +303,11 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
         self._must_cancel = True
         return True
 
+    ###################################################################################################################
+    # 当前函数负责执行 coro 函数,
+    # 如果 coro 返回的对象是堵塞状态(Future是Pending), 那么就将 self.__wakeup 丢到 add_done_callback 中.
+    # 如果 coro 返回的对象是非堵塞状态(Future是Cancelled或Finished), 那么就通知 loop 执行 self.__step 提取结果.
+    ###################################################################################################################
     def __step(self, exc=None):
         # 如果当前任务已经是 Cancelled 或 Finished 转台, 那么就抛出异常.
         if self.done():
@@ -395,6 +406,17 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
                         #
                         # 然而这里紧接着就将 result._asyncio_future_blocking 设置为 False,
                         # 目的是告诉 self.__wakeup (add_done_callback), 下次执行的时候不是堵塞状态.
+                        #
+                        # result.add_done_callback 会将 self.__weakup 放入到 result._callbacks 中,
+                        # 至于什么时候会执行 self.__weakup, 取决于以下三种场景:
+                        # 1. result.cancel()        # 取消任务
+                        # 2. result.set_exception() # 任务异常
+                        # 3. result.set_result()    # 任务已完成(重要: 由异步客户端完成堵塞任务之后执行set_result,)
+                        #                                            set_result会将 result 这个future的状态更改为
+                        #                                            _FINISHED, 并通过 loop.call_soon 让 loop 将
+                        #                                            __weakup放入到 loop._ready 列表中.
+                        #                                            loop 会再循环的例行事务中读取_ready中的__weakup
+                        #                                            方法并执行.
                         result._asyncio_future_blocking = False
                         result.add_done_callback(
                             self.__wakeup, context=self._context)
@@ -432,6 +454,12 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
             _leave_task(self._loop, self)
             self = None  # Needed to break cycles when an exception occurs.
 
+    ###################################################################################################################
+    # 该方法试图读取 future 的结果值,
+    # 如果读取到具体值, 则表示该事务算就结束了;
+    # 如果读取报错, 则表示 future 仍然是堵塞状态, 再次执行 self.__step ,
+    # 目的是让它再次执行 coro.send(None), 从而触发 coro 函数内的 await 的后半段代码, 周而复始...
+   ###################################################################################################################
     def __wakeup(self, future):
         try:
             future.result()
