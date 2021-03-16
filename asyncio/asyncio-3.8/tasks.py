@@ -264,6 +264,12 @@ class Task(futures._PyFuture):  # Inherit Python Task implementation
         """
         return base_tasks._task_print_stack(self, limit, file)
 
+    ###################################################################################################################
+    # 彻底覆盖 Future 的 cancel 接口, 因为它并没有执行 super().cancel, 所以说是彻底覆盖.
+    #
+    # Future.cancel 是将状态设定为 Cancelled 并且将所有的_callbacks推送(通知)给 loop 去执行.
+    # task.cancel 是将等待的那个Future(即: self._fut_waiter)的状态设定为Cancelled, 并且声明当前任务是取消状态(self._must_cancel).
+    ###################################################################################################################
     def cancel(self):
         """Request that this task cancel itself.
 
