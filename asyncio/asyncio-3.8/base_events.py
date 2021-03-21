@@ -181,6 +181,9 @@ def _interleave_addrinfos(addrinfos, first_address_family_count=1):
     return reordered
 
 
+#######################################################################################################################
+# 尝试关闭 loop.
+#######################################################################################################################
 def _run_until_complete_cb(fut):
     if not fut.cancelled():
         exc = fut.exception()
@@ -585,17 +588,27 @@ class BaseEventLoop(events.AbstractEventLoop):
 
         Return the Future's result, or raise its exception.
         """
+        # 检查当前 loop 状态, 如果是 closed 状态, 则抛出异常并退出程序.
         self._check_closed()
 
+        # new_task: bool
+        # 如果参数 future 是一个 Future 对象, 那么 new_task == False;
+        # 如果参数 future 不是一个 Future 对象, 那么 new_task == True.
         new_task = not futures.isfuture(future)
+
+        # coroutine, awaitable 对象, 会创建并返回一个Task对象(Task也是一个Future对象), 赋值给 future 变量.
+        # future, task 对象, 则直接返回, 赋值给 future 变量.
         future = tasks.ensure_future(future, loop=self)
         if new_task:
             # An exception is raised if the future didn't complete, so there
             # is no need to log the "destroy pending task" message
             future._log_destroy_pending = False
 
+        # 当 future 结束时, 尝试在 _run_until_complete_cb 中关闭 loop.
         future.add_done_callback(_run_until_complete_cb)
+
         try:
+            # 开始运行 loop 时间循环
             self.run_forever()
         except:
             if new_task and future.done() and not future.cancelled():
@@ -605,10 +618,14 @@ class BaseEventLoop(events.AbstractEventLoop):
                 future.exception()
             raise
         finally:
+            # 不要在尝试关闭 loop 了, 因为代码走到这里 loop 已结束了.
             future.remove_done_callback(_run_until_complete_cb)
+
+        # loop 都已经结束了, 如果 future 还没有结束, 那就抛异常退出程序了.
         if not future.done():
             raise RuntimeError('Event loop stopped before Future completed.')
 
+        # 这里返回个结果, 通常用处和意义不大, 暂不关注.
         return future.result()
 
     def stop(self):

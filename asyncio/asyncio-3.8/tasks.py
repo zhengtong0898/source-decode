@@ -766,6 +766,12 @@ async def sleep(delay, result=None, *, loop=None):
         h.cancel()
 
 
+#######################################################################################################################
+# 如果参数 coro_or_future 是 coroutine 对象, 那么就创建一个 Task 对象(它也是一个Future).
+# 如果参数 coro_or_future 是 Future 对象, 那么就直接返回该 Future 对象.
+# 如果参数 coro_or_future 是 awaitable 对象, 那么就封装 awaitable 对象为 coroutine 对象, 然后再次递归调用自己, 创建并返回Task对象.
+# 如果参数 coro_or_future 不是上述三种对象, 那么就抛出异常, 退出程序.
+#######################################################################################################################
 def ensure_future(coro_or_future, *, loop=None):
     """Wrap a coroutine or an awaitable in a future.
 
