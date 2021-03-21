@@ -552,25 +552,48 @@ class BaseEventLoop(events.AbstractEventLoop):
 
     def run_forever(self):
         """Run until stop() is called."""
+        # 检查当前 loop 状态, 如果是 closed 状态, 则抛出异常并退出程序.
         self._check_closed()
+
+        # 检查当前 loop 状态, 如果是 已运行 状态, 则抛出异常并退出程序.
         if self.is_running():
             raise RuntimeError('This event loop is already running')
+
+        # 检查其他 loop 状态, 如果有 其他的 loop 已经正在运行, 则抛出异常并退出程序.
         if events._get_running_loop() is not None:
             raise RuntimeError(
                 'Cannot run the event loop while another loop is running')
+
+        # TODO: 待补充.
         self._set_coroutine_origin_tracking(self._debug)
+
+        # 保存当前线程id
         self._thread_id = threading.get_ident()
 
+        # TODO: 待补充.
         old_agen_hooks = sys.get_asyncgen_hooks()
         sys.set_asyncgen_hooks(firstiter=self._asyncgen_firstiter_hook,
                                finalizer=self._asyncgen_finalizer_hook)
+
         try:
+            # 将当前对象 BaseEventLoop 保存到 events._running_loop 全局变量中.
             events._set_running_loop(self)
+
+            # 无限循环
             while True:
+
+                # asyncio的神秘面纱将在这里被一点一点的掀开.
                 self._run_once()
+
+                # 每次循环都检查一次,
+                # 如果 self._stopping 状态被设定(通知)为True, 那么就结束循环.
                 if self._stopping:
                     break
         finally:
+            # 无限循环结束,
+            # 更新 loop 状态,
+            # 清空线程id记录,
+            # 清空 events._running_loop 全局变量.
             self._stopping = False
             self._thread_id = None
             events._set_running_loop(None)
