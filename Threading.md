@@ -81,6 +81,10 @@ class TestLock(unittest.TestCase):
         # 也可以通过lock.locked()获得锁状态.
         self.assertTrue(lock.locked())
 
+        # 用完了, 别忘了解锁, 否则会导致其他对象堵塞.
+        lock.release()
+        self.assertFalse(lock.locked())
+
     def test_lock_twice(self):
         """
         lock加锁后, lock状态为True.
@@ -95,7 +99,11 @@ class TestLock(unittest.TestCase):
         lock_success = lock.acquire(blocking=False)
         self.assertFalse(lock_success)
 
-    def test_release_clock(self):
+        # 用完了, 别忘了解锁, 否则会导致其他对象堵塞.
+        lock.release()
+        self.assertFalse(lock.locked())
+
+    def test_release_lock(self):
         lock = Lock()
         lock.acquire()
 
@@ -111,6 +119,18 @@ class TestLock(unittest.TestCase):
         lock_success = lock.acquire()
         self.assertTrue(lock_success)
 
+        # 用完了, 别忘了解锁, 否则会导致其他对象堵塞.
+        lock.release()
+        self.assertFalse(lock.locked())
+
+    def test_auto_release_lock(self):
+        lock = Lock()
+
+        with lock:                                  # 加锁
+            self.assertTrue(lock.locked())          # 加锁状态.
+
+        self.assertFalse(lock.locked())             # 已解锁
+
 
 if __name__ == '__main__':
     unittest.main()
@@ -118,4 +138,5 @@ if __name__ == '__main__':
 
 > 核心要点:  
 > 1. 一次只能被一个对象加锁.  
-> 2. 任何对象, 任何线程中, 都可以使用`release()`来完成解锁动作(某种程度上来说, 存在安全隐患).  
+> 2. 任何对象, 任何线程中, 都可以使用`release()`来完成解锁动作(某种程度上来说, 存在安全隐患).     
+> 3. 锁的消费者别忘了使用完之后解锁, 否则其他线程中的对象可能就因为等待锁而造成程序假死现象.
