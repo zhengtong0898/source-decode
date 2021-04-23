@@ -52,3 +52,70 @@ t2.join()
 >     
 > 2. 对于线程来说, 只要在线程入口处定义好`local`变量, 后续不论调用多少层方法,   
 >    这些方法访问`local`变量时, 只会拿到当前线程已定义的变量.   
+
+
+&nbsp;  
+&nbsp;  
+### Lock
+`Lock`是一个互斥锁.   
+一个对象通过`acquire()`加锁成功后, 此时锁状态变成`True`.    
+其他对象无法再次通过`acquire()`加锁, 想要操作该锁有两种途径: 
+1. 循环检查`locked()`锁状态, 为`False`时可以使用;   
+2. 强制解锁`release()`后, 可以使用;  
+
+```python
+from threading import Lock
+import unittest
+
+
+class TestLock(unittest.TestCase):
+
+    def test_lock(self):
+        # 实例化一个锁对象.
+        lock = Lock()
+
+        # 通过返回值可以得知加锁操作是否成功.
+        lock_success = lock.acquire()
+        self.assertTrue(lock_success)
+
+        # 也可以通过lock.locked()获得锁状态.
+        self.assertTrue(lock.locked())
+
+    def test_lock_twice(self):
+        """
+        lock加锁后, lock状态为True.
+        当lock状态为True时, 无法再次完成加锁操作.
+        """
+
+        lock = Lock()
+        lock.acquire()
+
+        # 如果不提供blocking=False参数, 那么这里将会造成死锁,
+        # 后续的代码和后续的任务都将因为死锁而无法执行.
+        lock_success = lock.acquire(blocking=False)
+        self.assertFalse(lock_success)
+
+    def test_release_clock(self):
+        lock = Lock()
+        lock.acquire()
+
+        # 加锁失败
+        lock_success = lock.acquire(blocking=False)
+        self.assertFalse(lock_success)
+
+        # 解锁
+        lock.release()
+        self.assertFalse(lock.locked())
+
+        # 再次加锁
+        lock_success = lock.acquire()
+        self.assertTrue(lock_success)
+
+
+if __name__ == '__main__':
+    unittest.main()
+```
+
+> 核心要点:  
+> 1. 一次只能被一个对象加锁.  
+> 2. 任何对象, 任何线程中, 都可以使用`release()`来完成解锁动作(某种程度上来说, 存在安全隐患).  
