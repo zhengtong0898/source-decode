@@ -1,4 +1,4 @@
-### Threading.local
+### local
 `local`对象是一个大胖子, 它存储着每个线程的变量(主线程, 非主线程).  
 `local`对象需要定义在全局, 这样每个线程看到它都会认为它是一个全局变量.   
 
@@ -140,3 +140,80 @@ if __name__ == '__main__':
 > 1. 一次只能被一个对象加锁.  
 > 2. 任何对象, 任何线程中, 都可以使用`release()`来完成解锁动作(某种程度上来说, 存在安全隐患).     
 > 3. 锁的消费者别忘了使用完之后解锁, 否则其他线程中的对象可能就因为等待锁而造成程序假死现象.
+
+
+&nbsp;  
+&nbsp;  
+### RLock
+`RLock`的全称是`Reentrant Lock`, 中文直译是重入锁.   
+`RLock`从接口上来看, 跟`Lock`差不多, 有`acquire()`和`release()`.   
+`RLock`从功能成面上来看, 它因为内部维护了一个基于线程的`owner`和`count`属性, 所以它和`Lock`还不一样.  
+`RLock`的`owner`是一个标记(存储一个线程`id`), 用于限定使用对象, 只允许与`owner`相同的线程`id`才能使用这个锁.     
+`RLock`的`count`是一个计数器, 它允许同一个线程多次加锁, 每次加锁`count`都会递增`1`.   
+`RLock`的使用者必须在使用完锁之后, 自觉解锁; 若count无法回到0, 其他线程无法使用.
+
+其他线程如果想使用`RLock`则必须等待`RLock`的`owner=None`且`count=0`.   
+其他线程不可以直接`release`正在被其他线程使用的`RLock`对象.  
+```python
+import time
+import unittest
+import threading
+
+
+class TestRLock(unittest.TestCase):
+
+    def test_rlock_can_acquire_multi_times(self):
+        lock = threading._RLock()
+
+        # 同一个线程, 加锁三次.
+        lock.acquire()
+        lock.acquire()
+        lock.acquire()
+
+        # 主线程-id
+        master_thread_id = threading.get_ident()
+        self.assertEqual(lock._owner, master_thread_id)
+        self.assertEqual(lock._count, 3)
+
+    # 定义一个函数, 用于在其他线程中运行, 尝试加锁.
+    def acquire_by_other_thread(self, the_lock, the_lifetime):
+        the_lock.acquire()
+        the_lifetime.update({"status": "Done"})
+
+    def test_rlock_multithread_acquire(self):
+        lock = threading.RLock()
+
+        # 在主线程中 acquire
+        lock.acquire()
+
+        # 定义一个变量, 尝试让其他线程修改.
+        lifetime = {"status": "init"}
+
+        # 启动一个线程
+        t = threading.Thread(target=self.acquire_by_other_thread,
+                             args=(lock, lifetime))
+        t.daemon = True
+        t.start()
+
+        # 断言: lifetime的值没有发生变化
+        time.sleep(2)
+        self.assertEqual(lifetime["status"], "init")
+
+        # 解锁
+        lock.release()
+
+        # 断言: lifetime的值被其他线程改了.
+        time.sleep(2)
+        self.assertEqual(lifetime["status"], "Done")
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+```
+
+> 核心要点  
+> 1. `RLock`是一个面向线程的锁.   
+> 2. `RLock`允许同一个线程加锁多次, 同时也需要线程自觉解锁多次, 直到锁`count=0`.   
+> 3. `RLock`处于已加锁状态时, 不允许其他线程使用, 也不允许其他线程解锁(相比较于`Lock`, 有了相对安全的保障).   
+
