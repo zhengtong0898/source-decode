@@ -217,3 +217,106 @@ if __name__ == '__main__':
 > 2. `RLock`允许同一个线程加锁多次, 同时也需要线程自觉解锁多次, 直到锁`count=0`.   
 > 3. `RLock`处于已加锁状态时, 不允许其他线程使用, 也不允许其他线程解锁(相比较于`Lock`, 有了相对安全的保障).   
 
+
+&nbsp;  
+&nbsp;  
+### Condition  
+`Condition` 是一个条件锁.  
+
+`Condition` 不能直接使用, 必须先加锁(获得锁), 才可以执行 wait 或 notify 操作.   
+
+`Condition` 执行 wait 操作之后, 执行 wait 的线程就会一直处于堵塞状态, 必须等待其他线程 notify 才会激活 wait 线程.
+
+`Condition` 执行 wait 操作之后, 会自动解锁Condition; 主要是因为不解锁的话, 其他线程无法加锁从而无法执行notify.
+
+`Condition` 由于执行 wait 操作之后, 会自动解锁Condition; 所以假设多个线程都执行 wait 操作, 那么Condition内部就有很多 waiters; 通知线程可以使用 notify 挨个挨个激活这些waiters, 也可以使用 notify_all 一次性激活全部waiters.   
+
+`Condition` 还支持 wait_for 操作, 即当其他线程使用 notify 通知到 wait_for 这个 waiter 时, 它并不会立马就激活程序, 而是依赖于外部的`predicate`回调函数返回的值(返回值为True时才会激活).
+
+基于上述描述, Condition就像是一个标准的发布订阅模型, 即:
+1. 多个worker都在订阅相同的频道, 发布者可以说激活一个worker去做一件事情, 也可以说激活全部worker去做多件事情.    
+2. 多个worker可以订阅不同的频道(每个Condition锁变量是一个频道), 等等的场景.
+
+[源码分析](./pythonlibs/threading.py#L210)  
+
+```python
+import logging
+import unittest
+import threading
+
+
+class TestCondition(unittest.TestCase):
+
+    def test_acquire(self):
+        """ 默认Condition的基础锁是RLock, 这意味着同一个线程的情况下, 可以多次获得锁. """
+        cond = threading.Condition(lock=threading._RLock())
+
+        # 获得锁(加锁)
+        cond.acquire()
+        # 断言
+        master_thread_id = threading.get_ident()
+        self.assertEqual(cond._lock._owner, master_thread_id)
+        self.assertEqual(cond._lock._count, 1)
+
+        # 再次获得锁(加锁)
+        cond.acquire()
+        # 断言
+        self.assertEqual(cond._lock._owner, master_thread_id)
+        self.assertEqual(cond._lock._count, 2)
+
+        # 解锁
+        cond.release()
+        cond.release()
+        self.assertEqual(cond._lock._owner, None)
+        self.assertEqual(cond._lock._count, 0)
+
+    def test_acquire_and_release_not_delete_waiters(self):
+        """ 多worker订阅一个频道, 发布者一个一个激活worker. """
+        logging.basicConfig(level=logging.INFO)
+        cond = threading.Condition(lock=threading._RLock())
+
+        def worker(the_cond):
+            tid = threading.get_ident()
+            logging.info("worker-%s: subsribe..." % tid)
+            with the_cond:
+                the_cond.wait()
+                logging.info("worker-%s: start to work." % tid)
+
+        # 启动 10 个 worker, 让它们一起订阅 cond 频道
+        for i in range(10):
+            t = threading.Thread(target=worker, args=(cond, ))
+            t.daemon = True
+            t.start()
+
+        # 断言: 有 10 个worker在一个频道里面.
+        with cond:
+            self.assertEqual(len(cond._waiters), 10)
+
+        # 激活一个worker
+        with cond:
+            cond.notify()
+
+        # 断言: 还剩 9 个worker在一个频道里面.
+        with cond:
+            self.assertEqual(len(cond._waiters), 9)
+
+        # 激活剩余的worker
+        with cond:
+            cond.notify_all()
+
+        # 断言: 还剩 0 个worker在一个频道里面.
+        with cond:
+            self.assertEqual(len(cond._waiters), 0)
+
+
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+```
+
+> 核心要点  
+> 1. `Condition` 就像是一个发布订阅模型.   
+> 2. `Condition` 支持多个worker订阅(wait)一个频道(condition variable).  
+> 3. `Condition` 支持条件(`predicate`)激活.     
