@@ -309,8 +309,6 @@ class TestCondition(unittest.TestCase):
             self.assertEqual(len(cond._waiters), 0)
 
 
-
-
 if __name__ == '__main__':
     unittest.main()
 
@@ -320,3 +318,79 @@ if __name__ == '__main__':
 > 1. `Condition` 就像是一个发布订阅模型.   
 > 2. `Condition` 支持多个worker订阅(wait)一个频道(condition variable).  
 > 3. `Condition` 支持条件(`predicate`)激活.     
+
+
+&nbsp;  
+&nbsp;  
+### Event  
+`Event` 是一个事件锁.  
+`Event` 基于 `Condition(Lock)` 封装而成, 不允许相同线程重入多次加锁, 但是支持多线程并发加锁.  
+`Event` 不需要获得锁(加锁)就可以直接`wait`, 因为`Event.wait`内部将`获得锁`和`wait`两个动作封装成了一个动作.    
+`Event` 的`set`方法其实是将`获得锁`和`Condition.notify_all`两个动作封装成了一个动作.   
+`Event` 内部维护一个`_flag`属性, 用于标识事件锁的状态; 当 `_flag=True` 时, `worker`不能再订阅频道(即: 不能调用wait来等待).    
+`Event` 之所以支持多线程并发加锁, 是因为内部沿用`Condition.wait`方法, 每次触发`await`都会释放`Condition`的锁, 创建一个`waiter`并纳入到`Condition._waiters`中.  
+
+[源码分析](./pythonlibs/threading.py#L607)
+
+```python
+import time
+import logging
+import unittest
+import threading
+
+
+class TestEvent(unittest.TestCase):
+
+    def test_multithread_wait(self):
+        """ 多线程并发await """
+        logging.basicConfig(level=logging.INFO)
+        event = threading.Event()
+
+        def worker(the_event):
+            tid = threading.get_ident()
+            the_event.wait()
+
+        # 启动 10 个 worker, 让它们一起订阅 event 频道
+        for i in range(10):
+            t = threading.Thread(target=worker, args=(event, ))
+            t.daemon = True
+            t.start()
+
+        # 断言-1: 10个worker已经订阅成功.
+        with event._cond:
+            self.assertEqual(len(event._cond._waiters), 10)
+
+        # 激活所有worker
+        event.set()
+
+        # 断言: 10个worker已经激活成功.
+        with event._cond:
+            self.assertEqual(len(event._cond._waiters), 0)
+
+    def test_can_not_wait_after_set(self):
+        logging.basicConfig(level=logging.INFO)
+        event = threading.Event()
+        event.set()
+
+        def worker(the_event):
+            tid = threading.get_ident()
+            the_event.wait()
+
+        # 启动 10 个 worker, 让它们一起订阅 event 频道
+        for i in range(10):
+            t = threading.Thread(target=worker, args=(event, ))
+            t.daemon = True
+            t.start()
+
+        # 断言: 0个worker订阅成功.
+        with event._cond:
+            self.assertEqual(len(event._cond._waiters), 0)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+```
+
+> 核心要点  
+> 这一边`wait`订阅等待, 另外一边`set`通知激活`worker`, 根据情况`clear`(重置)`event`, 周而复始.  

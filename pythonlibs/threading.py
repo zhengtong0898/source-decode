@@ -621,8 +621,14 @@ class Event:
         """
         with self._cond:
             signaled = self._flag
+
+            # Event._flag = False == Event.clear()
+            # Event._flag = True  == Event.set()
+            # 当 Event 是 False 状态时, 允许不同线程订阅频道.
             if not signaled:
                 signaled = self._cond.wait(timeout)
+
+            # 当 Event 是 True 状态时, 不允许再订阅频道.
             return signaled
 
 
