@@ -456,6 +456,8 @@ class Semaphore:
         if value < 0:
             raise ValueError("semaphore initial value must be >= 0")
         self._cond = Condition(Lock())
+
+        # 如果不提供value参数值, 默认是1.
         self._value = value
 
     def acquire(self, blocking=True, timeout=None):
@@ -482,14 +484,25 @@ class Semaphore:
         that interval, return false.  Return true otherwise.
 
         """
+        # 非堵塞状态下, 不允许设定超时时间.
         if not blocking and timeout is not None:
             raise ValueError("can't specify timeout for non-blocking acquire")
+
+        # 返回值: True=获得锁(加锁)成功,  False=获得锁(加锁)失败.
         rc = False
         endtime = None
         with self._cond:
+
+            # 当 self._value == 0 时, 开始堵塞.
             while self._value == 0:
+
+                #    blocking 默认是 True, 所以这里会跳过条件句代码块.
+                # 当 blocking 是 False 时, 且 self._value == 0 时, 直接返回(非堵塞)False.
                 if not blocking:
                     break
+
+                #    timeout 默认是 None, 表示采用一直堵塞模式, 所以这里会跳过条件句代码块.
+                # 当 timeout 为非 None 时, 维护 endtime 和 timeout 时间.
                 if timeout is not None:
                     if endtime is None:
                         endtime = _time() + timeout
@@ -497,10 +510,16 @@ class Semaphore:
                         timeout = endtime - _time()
                         if timeout <= 0:
                             break
+
+                # 代码来到这里, 当前线程会进入堵塞状态, 同时 self._cond 被解锁.
+                # 其他线程可以继续使用 semaphore 锁.
                 self._cond.wait(timeout)
+
             else:
+                # 获得锁(加锁)成功, self._value 递减 1.
                 self._value -= 1
                 rc = True
+
         return rc
 
     __enter__ = acquire
@@ -513,7 +532,10 @@ class Semaphore:
 
         """
         with self._cond:
+            # 释放锁, self,_value 递增 1.
             self._value += 1
+
+            # 激活一个正在堵塞得线程.
             self._cond.notify()
 
     def __exit__(self, t, v, tb):
@@ -539,6 +561,8 @@ class BoundedSemaphore(Semaphore):
 
     def __init__(self, value=1):
         Semaphore.__init__(self, value)
+
+        # 初始限定值
         self._initial_value = value
 
     def release(self):
@@ -552,8 +576,11 @@ class BoundedSemaphore(Semaphore):
 
         """
         with self._cond:
+
+            # 不可以大于初始限定值
             if self._value >= self._initial_value:
                 raise ValueError("Semaphore released too many times")
+            
             self._value += 1
             self._cond.notify()
 

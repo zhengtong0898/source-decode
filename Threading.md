@@ -393,4 +393,114 @@ if __name__ == '__main__':
 ```
 
 > 核心要点  
-> 这一边`wait`订阅等待, 另外一边`set`通知激活`worker`, 根据情况`clear`(重置)`event`, 周而复始.  
+> 这一边`wait`订阅等待, 另外一边`set`通知激活`worker`, 根据情况`clear`(重置)`event`, 周而复始.   
+
+
+&nbsp;  
+&nbsp;  
+### Semaphore
+
+`Semaphore` 是一个信号锁.  
+
+`Semaphore` 维护一个`_value`属性, 作用是限定使用者`acquire`次数.
+    
+`Semaphore` 的`_value`属性默认值是1, 表示只允许使用者`acquire`1次.
+    
+`Semaphore` 的`acquire`方法, 每被执行一次, `_value`的值就会递减1.
+   
+`Semaphore` 的`release`方法, 每被执行一次, `_value`的值就会递增1.
+
+`Semaphore` 还有一个潜在的特征, 执行多次`release`, `_value`会持续递增, 甚至超越初始设定值.   
+    
+`Semaphore` 从功能的层面来看, 它就像是一个充电怪兽(移动电源箱子), 每次`acquire`就拿走一个移动电源, 
+            每次`release`就归还一个移动电源; 当所有移动电源都被`acquire`走了之后, 
+            后续的人想要再`acquire`就需要等其他人`release`才行.    
+
+
+[源码分析](./pythonlibs/threading.py#L443)
+            
+```python
+
+import unittest
+from threading import Semaphore
+
+
+class TestSemaphore(unittest.TestCase):
+
+    def test_multi_release(self):
+        """
+        执行多次`release`, `_value`会持续递增, 甚至超越初始设定值.
+        """
+        semaphore = Semaphore()
+        semaphore.release()
+        semaphore.release()
+        semaphore.release()
+        semaphore.release()
+        self.assertEqual(semaphore._value, 5)
+
+    def test_like_pool(self):
+        """
+        当执行`acquire`超过限定值时, 会一直堵塞, 等到其他人释放锁.
+        """
+        semaphore = Semaphore(value=10)
+
+        # 执行十次`acquire`
+        for i in range(10): semaphore.acquire()
+        # 断言-1: semaphore已经被使用完, 后面再次获取将会失败
+        self.assertEqual(semaphore._value, 0)
+
+        # 采取非堵塞模式获取, 看返回结果是成功还是失败
+        status = semaphore.acquire(blocking=False)
+        # 断言-2: semaphore已经被使用完, 所以这里肯定是False
+        self.assertEqual(status, False)
+
+        # 释放一次
+        semaphore.release()
+        status = semaphore.acquire()
+        # 断言-3: 可以正常acquire
+        self.assertEqual(status, True)
+
+        status = semaphore.acquire(timeout=3)
+        self.assertEqual(status, False)
+
+
+if __name__ == '__main__':
+    unittest.main()
+```
+ 
+ 
+ &nbsp;  
+ &nbsp;  
+ ### BoundedSemaphore
+ `BoundedSemaphore` 是一个有边界的信号锁.   
+ 
+ `BoundedSemaphore` 是在继承`Semaphore`的基础上, 增加了一个`_initial_value`属性, 用于限定信号量不得大于初始值.  
+ 
+ `BoundedSemaphore` 试图解决的就是 `Semaphore` 多次 `release` 时, 信号量大于初始值的问题.   
+ 
+ `BoundedSemaphore` 需要注意的是, `release`打到初始值之后, 会以抛异常形式来终止.  
+ 
+ [源码分析](./pythonlibs/threading.py#L545)
+ 
+ ```python 
+import unittest
+from threading import BoundedSemaphore
+
+
+class TestBoundedSemaphore(unittest.TestCase):
+
+    def test_release(self):
+        """
+        执行多次`release`, `_value`会持续递增, 甚至超越初始设定值.
+        """
+        bounded_semaphore = BoundedSemaphore()
+
+        # 断言-1: BoundedSemaphore 不允许信号量大于初始值.
+        with self.assertRaises(Exception):
+            bounded_semaphore.release()
+    
+
+if __name__ == '__main__':
+    unittest.main()
+
+```
