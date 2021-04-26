@@ -689,10 +689,28 @@ class Barrier:
 
         """
         self._cond = Condition(Lock())
+
+        # action 是一个可调用的函数对象,
+        # 在并发激活所有waiters之前, 先执行action函数对象.
+        #
+        # 在实际程序运行过程中, 可能并不直到什么时候 barrier 会满,
+        # 因此在这里增加一个回调方法, 用于告知回调方法准备全部激活worker去干活了.
         self._action = action
+
+        # timeout 参数是一个统一预设值,
+        # 当外部程序wait()没有提供timeout参数时, 以当前self._timeout为主.
         self._timeout = timeout
+
+        # parties 是 count 的上限值.
         self._parties = parties
+
+        #  0  --  filling:      未就绪状态
+        #  1  --  draining:     处于并发激活worker状态
+        # -1  --  resetting:    处于并发激活worker状态
+        # -2  --  broken:       报错了/异常状态/手动触发abort
         self._state = 0 #0 filling, 1, draining, -1 resetting, -2 broken
+
+        # 计数器, 外部程序每wait()一次, 计数器递增1.
         self._count = 0
 
     def wait(self, timeout=None):
@@ -704,66 +722,117 @@ class Barrier:
         Returns an individual index number from 0 to 'parties-1'.
 
         """
+        # 如果没有提供 timeout, 则采用统一超时时间(self._timeout).
+        # 如果统一超时时间也是None, 则表示采取持续堵塞模式.
         if timeout is None:
             timeout = self._timeout
+
+        # 获得锁(加锁)
         with self._cond:
-            self._enter() # Block while the barrier drains.
+
+            # TODO: 待测试
+            # 如果当前处于并发激活worker状态, 则这里会直接进入堵塞状态。
+            # 并且当并发激活完worker之后, 会再补激活一次中途加入堵塞的worker,
+            # 这些中途加入堵塞的worker会从这里开始继续往下执行代码, 再次进入下一个批次的等待.
+            self._enter()  # Block while the barrier drains.
+
             index = self._count
             self._count += 1
+
             try:
+                # 当 wait 达到上限值时, 并发激活所有worker.
                 if index + 1 == self._parties:
                     # We release the barrier
                     self._release()
+
+                # 当 wait 没有打到上限时, 加入等待队列.
                 else:
                     # We wait until someone releases us
                     self._wait(timeout)
+
+                # 返回当前等待的worker的索引位置.
                 return index
+
             finally:
+                # worker 被激活后, 计数器递减1
                 self._count -= 1
+
+                # 尝试激活哪些在 _state in (-1, 1) 状态下加入等待队列的worker.
                 # Wake up any threads waiting for barrier to drain.
                 self._exit()
 
     # Block until the barrier is ready for us, or raise an exception
     # if it is broken.
     def _enter(self):
+        """
+        这是一个带有checker性质的方法,
+        当 _state == 0       时, 什么都不会触发(即: 放行).
+        当 _state in (-1, 1) 时, 进入 draining 等待队列, 并发激活结束后, 会再次补发激活请求, 这里会被一并激活.
+        当 _state == 2       时, 抛异常.
+        """
+
         while self._state in (-1, 1):
             # It is draining or resetting, wait until done
             self._cond.wait()
-        #see if the barrier is in a broken state
+
+        # see if the barrier is in a broken state
         if self._state < 0:
             raise BrokenBarrierError
+
         assert self._state == 0
 
     # Optionally run the 'action' and release the threads waiting
     # in the barrier.
     def _release(self):
         try:
+            # 激活所有worker之前, 先触发回调函数, 告知回调函数，我要开始并发干活了.
             if self._action:
                 self._action()
+
+            # 将 _state 状态设置为: 并发激活中(pending).
             # enter draining state
             self._state = 1
+
+            # 通知所有在队列中等待的 worker.
             self._cond.notify_all()
+
         except:
-            #an exception during the _action handler.  Break and reraise
+            # 如果上面的 self._action() 回调函数执行出现报错,
+            # 这里会 将 _state 设为2, 然后补激活所有worker, 最后抛出异常.
+            # an exception during the _action handler.  Break and reraise
             self._break()
             raise
 
     # Wait in the barrier until we are released.  Raise an exception
     # if the barrier is reset or broken.
     def _wait(self, timeout):
+        # 利用 wait_for 做条件锁等待.
+        # 1. 当 timeout 值有效时, 且 wait_for 等待超时, 则将 _state 设为2, 抛异常, 退出.
+        # 2. 当 激活wait_for 时, _state == 0, 则将 _state 设为2, 抛异常, 退出.
+        # 3. 当 激活wait_for 时, _state in (-1, 1, -2), 激活成功.
         if not self._cond.wait_for(lambda : self._state != 0, timeout):
             #timed out.  Break the barrier
             self._break()
             raise BrokenBarrierError
+
+        # 当 _state in (-1, -2) 时, 拦住, 抛异常.
         if self._state < 0:
             raise BrokenBarrierError
+
+        # 当 _state == 1 时, 才是真正的激活成功.
         assert self._state == 1
 
     # If we are the last thread to exit the barrier, signal any threads
     # waiting for the barrier to drain.
     def _exit(self):
+
+        # 最后一个wait退出时, 才会进入这个条件块.
         if self._count == 0:
+
+            # 激活哪些在 _state in (-1, 1) 状态下加入等待队列的worker.
             if self._state in (-1, 1):
+
+                # 将状态重置为0.
                 #resetting or draining
                 self._state = 0
                 self._cond.notify_all()
@@ -776,16 +845,26 @@ class Barrier:
 
         """
         with self._cond:
+
+            # 如果有 worker 在等待.
             if self._count > 0:
+
+                # 当 _state 是 filling 状态时, 将其标记为 reset 状态.
                 if self._state == 0:
-                    #reset the barrier, waking up threads
+                    # reset the barrier, waking up threads
                     self._state = -1
+
+                # 当 _state 是 break 状态时, 将其标记为 reset 状态.
                 elif self._state == -2:
-                    #was broken, set it to reset state
-                    #which clears when the last thread exits
+                    # was broken, set it to reset state
+                    # which clears when the last thread exits
                     self._state = -1
+
+            # 如果没有 worker 在等待.
             else:
                 self._state = 0
+
+            # 激活所有worker.
             self._cond.notify_all()
 
     def abort(self):
@@ -795,12 +874,14 @@ class Barrier:
         attempting to 'wait()' will have BrokenBarrierError raised.
 
         """
+        # 将 barrier 标记为异常状态, 并且激活所有worker, 让所有worker都报错.
         with self._cond:
             self._break()
 
     def _break(self):
         # An internal error was detected.  The barrier is set to
         # a broken state all parties awakened.
+        # 将 barrier 标记为异常状态, 并且激活所有worker, 让所有worker都报错.
         self._state = -2
         self._cond.notify_all()
 

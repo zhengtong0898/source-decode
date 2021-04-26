@@ -10,4 +10,4 @@
 |Event|[事件锁](./Threading.md#Event)|
 |Semaphore|[信号量锁](./Threading.md#Semaphore)|
 |BoundedSemaphore|[有边界的信号量锁](./Threading.md#BoundedSemaphore)|
-|Barrier|-|
+|Barrier|[阈值锁](./Threading.md#Barrier)|

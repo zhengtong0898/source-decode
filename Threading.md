@@ -504,3 +504,186 @@ if __name__ == '__main__':
     unittest.main()
 
 ```
+
+
+&nbsp;  
+&nbsp;  
+### Barrier
+`Barrier` 是一个阈值锁.   
+`Barrier` 在初始化时就需要一个阈值参数(数值), 该阈值用于控制并发行为.   
+`Barrier` 与其他锁不一样, 它需要`worker`先通过`wait`进行队列等待, 当队列中的`worker`达到阈值数量时, 再统一激活所有`worker`去工作.   
+
+
+[源码分析](./pythonlibs/threading.py#L673)
+
+```python
+import time
+import unittest
+import threading
+
+
+class TestBarrier(unittest.TestCase):
+
+    def test_feature(self):
+
+        """
+        特性: barrier锁的特点是, 不需要某个程序去notify,
+             而是当wait达到上限时, 并发激活(唤醒)所有worker.
+        """
+
+        barrier = threading.Barrier(3)
+        data = {}
+
+        def worker(the_barrier, the_data):
+            worker_name = "woker-%s" % threading.get_ident()
+            the_barrier.wait()
+            the_data[worker_name] = worker_name
+
+        # 第一个线程
+        t = threading.Thread(target=worker, args=(barrier, data))
+        t.daemon = True
+        t.start()
+
+        # 断言-1: barrier 还没有满, 所以没有工作.
+        time.sleep(1)
+        self.assertEqual(len(data), 0)
+
+        # 第二个线程
+        t = threading.Thread(target=worker, args=(barrier, data))
+        t.daemon = True
+        t.start()
+
+        # 断言-2: barrier 还没有满, 所以没有工作.
+        time.sleep(1)
+        self.assertEqual(len(data), 0)
+
+        # 第三个线程
+        t = threading.Thread(target=worker, args=(barrier, data))
+        t.daemon = True
+        t.start()
+
+        # 断言-3: barrier 已满, 并发激活, 等待1秒, 所有线程都将数据写入到 data 中.
+        time.sleep(1)
+        self.assertEqual(len(data), 3)
+
+    def test_abort(self):
+        barrier = threading.Barrier(3)
+        data = {}
+        error_data = {}
+
+        def worker(the_barrier, the_data, the_error_data):
+            worker_name = "woker-%s" % threading.get_ident()
+            try:
+
+                the_barrier.wait()
+                the_data[worker_name] = worker_name
+            except Exception as e:
+                # 不要报错.
+                the_error_data[worker_name] = worker_name
+
+        # 第一个线程
+        t = threading.Thread(target=worker, args=(barrier, data, error_data))
+        t.daemon = True
+        t.start()
+
+        # 断言-1: barrier 还没有满, 所以没有工作.
+        time.sleep(1)
+        self.assertEqual(len(data), 0)
+
+        # 第二个线程
+        t = threading.Thread(target=worker, args=(barrier, data, error_data))
+        t.daemon = True
+        t.start()
+
+        # 断言-2: barrier 还没有满, 所以没有工作.
+        time.sleep(1)
+        self.assertEqual(len(data), 0)
+
+        # 将 barrier._state 设定为2, 并且激活所有worker.
+        barrier.abort()
+
+        # 断言-3: worker内的.wait()报错, 所以会将数据写入到error_data.
+        time.sleep(1)
+        self.assertEqual(len(data), 0)
+        self.assertEqual(len(error_data), 2)
+
+    def test_enter(self):
+
+        """
+        在 barrier._enter 内有一个比较抽象的逻辑代码,
+        当 barrier._state 状态处于 (-1, 1) 时, 表示barrier正在激活所有worker,
+        如果在激活的过程中, 此时有其他线程的worker执行了wait, 那这个worker就会被 barrier._enter() 给堵住,
+        当该批次所有的worker都激活之后, 再回过头来处理这个中途进来的worker.
+
+        这里重点是测试最后一个worker再退出之前, 补充执行notify_all的情况.
+        """
+
+        barrier = threading.Barrier(3)
+        data = {}
+
+        def worker(the_barrier, the_data):
+            worker_name = "woker-%s" % threading.get_ident()
+            the_barrier.wait()
+            the_data[worker_name] = worker_name
+
+        # 第一个线程
+        t = threading.Thread(target=worker, args=(barrier, data))
+        t.daemon = True
+        t.start()
+
+        # 第二个线程
+        t = threading.Thread(target=worker, args=(barrier, data))
+        t.daemon = True
+        t.start()
+
+        # 断言-1: barrier 还没有满, 所以没有工作.
+        time.sleep(1)
+        self.assertEqual(len(data), 0)
+        self.assertEqual(len(barrier._cond._waiters), 2)
+
+        # 由于barrier提供的内置方法, 都无法满足测试场景.
+        # 所以这里采取 hack(入微) 方式来测试.
+        with barrier._cond:
+            barrier._state = 1
+            barrier._cond.notify()
+
+        # 断言-2: 这时 barrier 的状态是 1, 只激活了一个, 还剩一个没有激活.
+        time.sleep(1)
+        self.assertEqual(barrier._state, 1)
+        self.assertEqual(barrier._count, 1)
+        self.assertEqual(len(barrier._cond._waiters), 1)
+
+        # 在 barrier._state 处于 1 的状态下追加一个worker.
+        # 此时, 它会被 enter 堵塞住, barrier._count 并不会递增1.
+        t = threading.Thread(target=worker, args=(barrier, data))
+        t.daemon = True
+        t.start()
+
+        # 断言-3: 这时 barrier 的状态是 1, barrier._count 没有递增 1, 但是workers队列多了一个worker.
+        time.sleep(1)
+        self.assertEqual(barrier._state, 1)
+        self.assertEqual(barrier._count, 1)
+        self.assertEqual(len(barrier._cond._waiters), 2)
+
+        # 重点:
+        # 这里 notify 一次, 当前批次的最后一个worker再退出之前, 执行 self._exit()
+        # self._exit() 内部会执行 notify_all 唤醒所有中途加入进来的workers.
+        # 这些 workers 会回到 wait 进入另一个批次等待, 周而复始.
+        with barrier._cond:
+            barrier._state = 1
+            barrier._cond.notify()
+
+        # 断言-4: 这时所有worker被激活, 所有计数器归0, 所有状态归0
+        time.sleep(1)
+        self.assertEqual(barrier._state, 0)
+        self.assertEqual(barrier._count, 1)
+        self.assertEqual(len(barrier._cond._waiters), 1)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+```
+
+> 参考:  
+> https://www.cnblogs.com/ZXYloveFR/p/11300172.html
